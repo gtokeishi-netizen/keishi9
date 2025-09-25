@@ -386,19 +386,31 @@ class SheetsWebhookHandler {
      */
     private function update_acf_fields($post_id, $row_data) {
         $acf_mapping = array(
-            7 => 'grant_amount',
-            8 => 'application_deadline',
-            9 => 'grant_organization',
-            10 => 'application_conditions',
-            11 => 'grant_overview',
-            12 => 'application_method',
-            13 => 'contact_info',
-            14 => 'reference_url'
+            7 => 'max_amount',
+            8 => 'max_amount_numeric',
+            9 => 'deadline',
+            10 => 'deadline_date',
+            11 => 'organization',
+            12 => 'organization_type',
+            13 => 'grant_target',
+            14 => 'application_method',
+            15 => 'contact_info',
+            16 => 'official_url',
+            17 => 'target_prefecture',
+            18 => 'prefecture_name',
+            19 => 'target_municipality',
+            20 => 'regional_limitation',
+            21 => 'application_status'
         );
         
         foreach ($acf_mapping as $col_index => $field_name) {
             if (isset($row_data[$col_index])) {
                 $value = $row_data[$col_index];
+                
+                // 数値フィールドの処理
+                if ($field_name === 'max_amount_numeric') {
+                    $value = intval($value);
+                }
                 
                 // JSON文字列の場合はデコード
                 if (is_string($value) && ($decoded = json_decode($value, true)) !== null) {
@@ -414,15 +426,15 @@ class SheetsWebhookHandler {
      * カテゴリとタグの更新
      */
     private function update_taxonomies($post_id, $row_data) {
-        // カテゴリ（P列 = インデックス15）
-        if (isset($row_data[15]) && !empty($row_data[15])) {
-            $categories = array_map('trim', explode(',', $row_data[15]));
+        // カテゴリ（W列 = インデックス22）
+        if (isset($row_data[22]) && !empty($row_data[22])) {
+            $categories = array_map('trim', explode(',', $row_data[22]));
             wp_set_post_terms($post_id, $categories, 'grant_category');
         }
         
-        // タグ（Q列 = インデックス16）
-        if (isset($row_data[16]) && !empty($row_data[16])) {
-            $tags = array_map('trim', explode(',', $row_data[16]));
+        // タグ（X列 = インデックス23）
+        if (isset($row_data[23]) && !empty($row_data[23])) {
+            $tags = array_map('trim', explode(',', $row_data[23]));
             wp_set_post_terms($post_id, $tags, 'grant_tag');
         }
     }

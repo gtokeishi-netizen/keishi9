@@ -84,14 +84,21 @@ class SheetsInitializer {
             'ステータス' => 'publish/draft/private/deleted',
             '作成日' => '投稿作成日時（自動入力）',
             '更新日' => '投稿更新日時（自動入力）',
-            '助成金額' => '助成金の金額',
-            '申請期限' => '申請締切日',
-            '実施団体' => '助成金を実施する団体名',
-            '応募条件' => '申請資格・条件',
-            '助成金概要' => '助成金の目的・概要',
-            '申請方法' => '申請手順・方法',
+            '助成金額（表示用）' => '表示用の助成金額',
+            '助成金額（数値）' => '数値での助成金額（円）',
+            '申請期限（表示用）' => '表示用の申請期限',
+            '申請期限（日付）' => 'YYYY-MM-DD形式の期限',
+            '実施組織' => '助成金を実施する組織名',
+            '組織タイプ' => 'national/prefecture/city等',
+            '対象者・対象事業' => '助成対象の詳細',
+            '申請方法' => 'online/mail/visit等',
             '問い合わせ先' => '連絡先情報',
-            '参考URL' => '公式サイトやURL',
+            '公式URL' => '公式サイトURL',
+            '都道府県コード' => 'tokyo/osaka等のコード',
+            '都道府県名' => '東京都/大阪府等の表示名',
+            '対象市町村' => '対象となる市町村名',
+            '地域制限' => 'nationwide/prefecture_only等',
+            '申請ステータス' => 'open/closed/upcoming等',
             'カテゴリ' => 'カンマ区切りのカテゴリ名',
             'タグ' => 'カンマ区切りのタグ名',
             'シート更新日' => 'スプレッドシート更新日時（自動入力）'
@@ -100,7 +107,7 @@ class SheetsInitializer {
         // ヘッダー行を書き込み
         $header_values = array_keys($headers);
         $result = $this->sheets_sync->write_sheet_data(
-            $this->sheets_sync->sheet_name . '!A1:R1', 
+            $this->sheets_sync->sheet_name . '!A1:Y1', 
             array($header_values)
         );
         
@@ -111,7 +118,7 @@ class SheetsInitializer {
         // 2行目に説明を追加
         $descriptions = array_values($headers);
         $this->sheets_sync->write_sheet_data(
-            $this->sheets_sync->sheet_name . '!A2:R2', 
+            $this->sheets_sync->sheet_name . '!A2:Y2', 
             array($descriptions)
         );
         
@@ -185,7 +192,7 @@ class SheetsInitializer {
         if (!empty($rows)) {
             // 一括で書き込み
             $end_row = $start_row + count($rows) - 1;
-            $range = $this->sheets_sync->sheet_name . "!A{$start_row}:R{$end_row}";
+            $range = $this->sheets_sync->sheet_name . "!A{$start_row}:Y{$end_row}";
             
             $result = $this->sheets_sync->write_sheet_data($range, $rows);
             
@@ -219,18 +226,35 @@ class SheetsInitializer {
         
         // ACFフィールドを追加
         $acf_fields = array(
-            'grant_amount',
-            'application_deadline',
-            'grant_organization',
-            'application_conditions',
-            'grant_overview',
-            'application_method',
-            'contact_info',
-            'reference_url'
+            'max_amount',              // H列
+            'max_amount_numeric',      // I列
+            'deadline',                // J列
+            'deadline_date',           // K列
+            'organization',            // L列
+            'organization_type',       // M列
+            'grant_target',            // N列
+            'application_method',      // O列
+            'contact_info',            // P列
+            'official_url',            // Q列
+            'target_prefecture',       // R列
+            'prefecture_name',         // S列
+            'target_municipality',     // T列
+            'regional_limitation',     // U列
+            'application_status'       // V列
         );
         
         foreach ($acf_fields as $field) {
             $value = get_field($field, $post_id);
+            
+            // 都道府県名の自動生成
+            if ($field === 'prefecture_name' && empty($value)) {
+                $prefecture_code = get_field('target_prefecture', $post_id);
+                if ($prefecture_code) {
+                    $value = $this->get_prefecture_name_by_code($prefecture_code);
+                    // 値を更新して保存
+                    update_field('prefecture_name', $value, $post_id);
+                }
+            }
             
             // 配列の場合はJSON文字列に変換
             if (is_array($value)) {
@@ -240,15 +264,15 @@ class SheetsInitializer {
             $row[] = (string)$value;
         }
         
-        // カテゴリを追加
+        // カテゴリを追加（W列）
         $categories = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
         $row[] = is_array($categories) && !is_wp_error($categories) ? implode(', ', $categories) : '';
         
-        // タグを追加
+        // タグを追加（X列）
         $tags = wp_get_post_terms($post_id, 'grant_tag', array('fields' => 'names'));
         $row[] = is_array($tags) && !is_wp_error($tags) ? implode(', ', $tags) : '';
         
-        // スプレッドシート更新日
+        // スプレッドシート更新日（Y列）
         $row[] = current_time('mysql');
         
         return $row;
@@ -271,7 +295,7 @@ class SheetsInitializer {
     public function clear_sheet() {
         try {
             // データ範囲を取得してクリア
-            $range = $this->sheets_sync->sheet_name . '!A:Z';
+            $range = $this->sheets_sync->sheet_name . '!A:Y';
             $result = $this->sheets_sync->write_sheet_data($range, array(array()));
             
             if ($result) {
@@ -332,6 +356,63 @@ class SheetsInitializer {
         } else {
             wp_send_json_error($result['message']);
         }
+    }
+    
+    /**
+     * 都道府県コードから名前を取得
+     */
+    private function get_prefecture_name_by_code($code) {
+        $prefectures = array(
+            'hokkaido' => '北海道',
+            'aomori' => '青森県',
+            'iwate' => '岩手県',
+            'miyagi' => '宮城県',
+            'akita' => '秋田県',
+            'yamagata' => '山形県',
+            'fukushima' => '福島県',
+            'ibaraki' => '茨城県',
+            'tochigi' => '栃木県',
+            'gunma' => '群馬県',
+            'saitama' => '埼玉県',
+            'chiba' => '千葉県',
+            'tokyo' => '東京都',
+            'kanagawa' => '神奈川県',
+            'niigata' => '新潟県',
+            'toyama' => '富山県',
+            'ishikawa' => '石川県',
+            'fukui' => '福井県',
+            'yamanashi' => '山梨県',
+            'nagano' => '長野県',
+            'gifu' => '岐阜県',
+            'shizuoka' => '静岡県',
+            'aichi' => '愛知県',
+            'mie' => '三重県',
+            'shiga' => '滋賀県',
+            'kyoto' => '京都府',
+            'osaka' => '大阪府',
+            'hyogo' => '兵庫県',
+            'nara' => '奈良県',
+            'wakayama' => '和歌山県',
+            'tottori' => '鳥取県',
+            'shimane' => '島根県',
+            'okayama' => '岡山県',
+            'hiroshima' => '広島県',
+            'yamaguchi' => '山口県',
+            'tokushima' => '徳島県',
+            'kagawa' => '香川県',
+            'ehime' => '愛媛県',
+            'kochi' => '高知県',
+            'fukuoka' => '福岡県',
+            'saga' => '佐賀県',
+            'nagasaki' => '長崎県',
+            'kumamoto' => '熊本県',
+            'oita' => '大分県',
+            'miyazaki' => '宮崎県',
+            'kagoshima' => '鹿児島県',
+            'okinawa' => '沖縄県',
+        );
+        
+        return isset($prefectures[$code]) ? $prefectures[$code] : '';
     }
     
     /**

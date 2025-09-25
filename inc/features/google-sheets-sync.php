@@ -201,7 +201,7 @@ class GoogleSheetsSync {
         }
         
         if (!$range) {
-            $range = $this->sheet_name . '!A:Z'; // 全データを取得
+            $range = $this->sheet_name . '!A:Y'; // 全データを取得（Y列まで）
         }
         
         $url = self::SHEETS_API_URL . $this->spreadsheet_id . '/values/' . urlencode($range);
@@ -325,14 +325,21 @@ class GoogleSheetsSync {
         
         // ACFフィールドを追加
         $acf_fields = array(
-            'grant_amount',
-            'application_deadline',
-            'grant_organization',
-            'application_conditions',
-            'grant_overview',
-            'application_method',
-            'contact_info',
-            'reference_url'
+            'max_amount',              // 助成金額（表示用）
+            'max_amount_numeric',      // 助成金額（数値）
+            'deadline',                // 申請期限（表示用）
+            'deadline_date',           // 申請期限（日付）
+            'organization',            // 実施組織
+            'organization_type',       // 組織タイプ
+            'grant_target',            // 対象者・対象事業
+            'application_method',      // 申請方法
+            'contact_info',            // 問い合わせ先
+            'official_url',            // 公式URL
+            'target_prefecture',       // 対象都道府県（コード）
+            'prefecture_name',         // 都道府県名（表示用）
+            'target_municipality',     // 対象市町村
+            'regional_limitation',     // 地域制限
+            'application_status'       // 申請ステータス
         );
         
         foreach ($acf_fields as $field) {
@@ -356,27 +363,34 @@ class GoogleSheetsSync {
      */
     public function setup_sheet_headers() {
         $headers = array(
-            'ID',
-            'タイトル',
-            '内容',
-            '抜粋',
-            'ステータス',
-            '作成日',
-            '更新日',
-            '助成金額',
-            '申請期限',
-            '実施団体',
-            '応募条件',
-            '助成金概要',
-            '申請方法',
-            '問い合わせ先',
-            '参考URL',
-            'カテゴリ',
-            'タグ',
-            'シート更新日'
+            'ID',                    // A列
+            'タイトル',               // B列
+            '内容',                  // C列
+            '抜粋',                  // D列
+            'ステータス',             // E列
+            '作成日',                // F列
+            '更新日',                // G列
+            '助成金額（表示用）',      // H列
+            '助成金額（数値）',        // I列
+            '申請期限（表示用）',      // J列
+            '申請期限（日付）',        // K列
+            '実施組織',              // L列
+            '組織タイプ',            // M列
+            '対象者・対象事業',       // N列
+            '申請方法',              // O列
+            '問い合わせ先',          // P列
+            '公式URL',               // Q列
+            '都道府県コード',        // R列
+            '都道府県名',            // S列
+            '対象市町村',            // T列
+            '地域制限',              // U列
+            '申請ステータス',        // V列
+            'カテゴリ',              // W列
+            'タグ',                  // X列
+            'シート更新日'           // Y列
         );
         
-        return $this->write_sheet_data($this->sheet_name . '!A1:R1', array($headers));
+        return $this->write_sheet_data($this->sheet_name . '!A1:Y1', array($headers));
     }
     
     /**
@@ -534,14 +548,21 @@ class GoogleSheetsSync {
             if ($post_id) {
                 // ACFフィールドを更新
                 $acf_fields = array(
-                    'grant_amount' => isset($row[7]) ? $row[7] : '',
-                    'application_deadline' => isset($row[8]) ? $row[8] : '',
-                    'grant_organization' => isset($row[9]) ? $row[9] : '',
-                    'application_conditions' => isset($row[10]) ? $row[10] : '',
-                    'grant_overview' => isset($row[11]) ? $row[11] : '',
-                    'application_method' => isset($row[12]) ? $row[12] : '',
-                    'contact_info' => isset($row[13]) ? $row[13] : '',
-                    'reference_url' => isset($row[14]) ? $row[14] : '',
+                    'max_amount' => isset($row[7]) ? $row[7] : '',
+                    'max_amount_numeric' => isset($row[8]) ? intval($row[8]) : 0,
+                    'deadline' => isset($row[9]) ? $row[9] : '',
+                    'deadline_date' => isset($row[10]) ? $row[10] : '',
+                    'organization' => isset($row[11]) ? $row[11] : '',
+                    'organization_type' => isset($row[12]) ? $row[12] : 'national',
+                    'grant_target' => isset($row[13]) ? $row[13] : '',
+                    'application_method' => isset($row[14]) ? $row[14] : 'online',
+                    'contact_info' => isset($row[15]) ? $row[15] : '',
+                    'official_url' => isset($row[16]) ? $row[16] : '',
+                    'target_prefecture' => isset($row[17]) ? $row[17] : '',
+                    'prefecture_name' => isset($row[18]) ? $row[18] : '',
+                    'target_municipality' => isset($row[19]) ? $row[19] : '',
+                    'regional_limitation' => isset($row[20]) ? $row[20] : 'nationwide',
+                    'application_status' => isset($row[21]) ? $row[21] : 'open',
                 );
                 
                 foreach ($acf_fields as $field => $value) {
@@ -549,14 +570,14 @@ class GoogleSheetsSync {
                 }
                 
                 // カテゴリを設定
-                if (isset($row[15]) && !empty($row[15])) {
-                    $categories = array_map('trim', explode(',', $row[15]));
+                if (isset($row[22]) && !empty($row[22])) {
+                    $categories = array_map('trim', explode(',', $row[22]));
                     wp_set_post_terms($post_id, $categories, 'grant_category');
                 }
                 
                 // タグを設定
-                if (isset($row[16]) && !empty($row[16])) {
-                    $tags = array_map('trim', explode(',', $row[16]));
+                if (isset($row[23]) && !empty($row[23])) {
+                    $tags = array_map('trim', explode(',', $row[23]));
                     wp_set_post_terms($post_id, $tags, 'grant_tag');
                 }
                 

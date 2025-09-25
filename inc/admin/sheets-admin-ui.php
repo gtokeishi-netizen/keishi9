@@ -299,17 +299,24 @@ class SheetsAdminUI {
                             <tr><td>E</td><td>ステータス</td><td>publish / draft / private / deleted</td></tr>
                             <tr><td>F</td><td>作成日</td><td>投稿作成日時</td></tr>
                             <tr><td>G</td><td>更新日</td><td>投稿更新日時</td></tr>
-                            <tr><td>H</td><td>助成金額</td><td>ACF: grant_amount</td></tr>
-                            <tr><td>I</td><td>申請期限</td><td>ACF: application_deadline</td></tr>
-                            <tr><td>J</td><td>実施団体</td><td>ACF: grant_organization</td></tr>
-                            <tr><td>K</td><td>応募条件</td><td>ACF: application_conditions</td></tr>
-                            <tr><td>L</td><td>助成金概要</td><td>ACF: grant_overview</td></tr>
-                            <tr><td>M</td><td>申請方法</td><td>ACF: application_method</td></tr>
-                            <tr><td>N</td><td>問い合わせ先</td><td>ACF: contact_info</td></tr>
-                            <tr><td>O</td><td>参考URL</td><td>ACF: reference_url</td></tr>
-                            <tr><td>P</td><td>カテゴリ</td><td>カンマ区切りのカテゴリ名</td></tr>
-                            <tr><td>Q</td><td>タグ</td><td>カンマ区切りのタグ名</td></tr>
-                            <tr><td>R</td><td>シート更新日</td><td>スプレッドシート最終更新日時</td></tr>
+                            <tr><td>H</td><td>助成金額（表示用）</td><td>ACF: max_amount</td></tr>
+                            <tr><td>I</td><td>助成金額（数値）</td><td>ACF: max_amount_numeric</td></tr>
+                            <tr><td>J</td><td>申請期限（表示用）</td><td>ACF: deadline</td></tr>
+                            <tr><td>K</td><td>申請期限（日付）</td><td>ACF: deadline_date</td></tr>
+                            <tr><td>L</td><td>実施組織</td><td>ACF: organization</td></tr>
+                            <tr><td>M</td><td>組織タイプ</td><td>ACF: organization_type</td></tr>
+                            <tr><td>N</td><td>対象者・対象事業</td><td>ACF: grant_target</td></tr>
+                            <tr><td>O</td><td>申請方法</td><td>ACF: application_method</td></tr>
+                            <tr><td>P</td><td>問い合わせ先</td><td>ACF: contact_info</td></tr>
+                            <tr><td>Q</td><td>公式URL</td><td>ACF: official_url</td></tr>
+                            <tr><td>R</td><td>都道府県コード</td><td>ACF: target_prefecture</td></tr>
+                            <tr><td>S</td><td>都道府県名</td><td>ACF: prefecture_name</td></tr>
+                            <tr><td>T</td><td>対象市町村</td><td>ACF: target_municipality</td></tr>
+                            <tr><td>U</td><td>地域制限</td><td>ACF: regional_limitation</td></tr>
+                            <tr><td>V</td><td>申請ステータス</td><td>ACF: application_status</td></tr>
+                            <tr><td>W</td><td>カテゴリ</td><td>カンマ区切りのカテゴリ名</td></tr>
+                            <tr><td>X</td><td>タグ</td><td>カンマ区切りのタグ名</td></tr>
+                            <tr><td>Y</td><td>シート更新日</td><td>スプレッドシート最終更新日時</td></tr>
                         </tbody>
                     </table>
                 </div>
