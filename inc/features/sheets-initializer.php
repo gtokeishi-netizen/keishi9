@@ -343,18 +343,33 @@ class SheetsInitializer {
      * AJAX: スプレッドシート初期化
      */
     public function ajax_initialize_sheet() {
-        check_ajax_referer('gi_sheets_nonce', 'nonce');
-        
-        if (!current_user_can('edit_posts')) {
-            wp_send_json_error('Permission denied');
-        }
-        
-        $result = $this->initialize_sheet();
-        
-        if ($result['success']) {
-            wp_send_json_success($result['message']);
-        } else {
-            wp_send_json_error($result['message']);
+        try {
+            gi_log_error('AJAX initialize_sheet started');
+            
+            check_ajax_referer('gi_sheets_nonce', 'nonce');
+            
+            if (!current_user_can('edit_posts')) {
+                gi_log_error('Permission denied for user', array('user_id' => get_current_user_id()));
+                wp_send_json_error('Permission denied');
+            }
+            
+            gi_log_error('Starting sheet initialization');
+            $result = $this->initialize_sheet();
+            
+            gi_log_error('Sheet initialization result', $result);
+            
+            if ($result['success']) {
+                wp_send_json_success($result['message']);
+            } else {
+                wp_send_json_error($result['message']);
+            }
+            
+        } catch (Exception $e) {
+            gi_log_error('AJAX initialize_sheet failed', array(
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ));
+            wp_send_json_error('初期化中にエラーが発生しました: ' . $e->getMessage());
         }
     }
     

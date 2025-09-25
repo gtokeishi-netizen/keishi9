@@ -307,136 +307,209 @@ class GoogleSheetsSync {
      * 投稿データをスプレッドシート用に変換
      */
     private function convert_post_to_sheet_row($post_id) {
-        $post = get_post($post_id);
-        if (!$post || $post->post_type !== 'grant') {
+        try {
+            gi_log_error('Converting post to sheet row', array('post_id' => $post_id));
+            
+            $post = get_post($post_id);
+            if (!$post || $post->post_type !== 'grant') {
+                gi_log_error('Invalid post for conversion', array('post_id' => $post_id, 'post_type' => $post ? $post->post_type : 'null'));
+                return false;
+            }
+            
+            // 基本データ (A-G列)
+            $row = array(
+                $post_id, // A: ID
+                $post->post_title, // B: タイトル
+                wp_strip_all_tags($post->post_content), // C: 内容（HTMLタグを除去）
+                $post->post_excerpt, // D: 抜粋
+                $post->post_status, // E: ステータス
+                $post->post_date, // F: 作成日
+                $post->post_modified, // G: 更新日
+            );
+            
+            // ACFフィールドを追加 (H-V列)
+            $acf_fields = array(
+                'max_amount',              // H: 助成金額（表示用）
+                'max_amount_numeric',      // I: 助成金額（数値）
+                'deadline',                // J: 申請期限（表示用）
+                'deadline_date',           // K: 申請期限（日付）
+                'organization',            // L: 実施組織
+                'organization_type',       // M: 組織タイプ
+                'grant_target',            // N: 対象者・対象事業
+                'application_method',      // O: 申請方法
+                'contact_info',            // P: 問い合わせ先
+                'official_url',            // Q: 公式URL
+                'target_prefecture',       // R: 都道府県コード
+                'prefecture_name',         // S: 都道府県名
+                'target_municipality',     // T: 対象市町村
+                'regional_limitation',     // U: 地域制限
+                'application_status'       // V: 申請ステータス
+            );
+            
+            foreach ($acf_fields as $field) {
+                $value = get_field($field, $post_id);
+                
+                // 都道府県名の自動生成
+                if ($field === 'prefecture_name' && empty($value)) {
+                    $prefecture_code = get_field('target_prefecture', $post_id);
+                    if ($prefecture_code && function_exists('gi_get_prefecture_name_by_code')) {
+                        $value = gi_get_prefecture_name_by_code($prefecture_code);
+                    }
+                }
+                
+                $row[] = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value;
+            }
+            
+            // カテゴリを追加 (W列)
+            $categories = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
+            $row[] = (is_array($categories) && !is_wp_error($categories)) ? implode(', ', $categories) : '';
+            
+            // タグを追加 (X列)
+            $tags = wp_get_post_terms($post_id, 'grant_tag', array('fields' => 'names'));
+            $row[] = (is_array($tags) && !is_wp_error($tags)) ? implode(', ', $tags) : '';
+            
+            // シート更新日を追加 (Y列)
+            $row[] = current_time('mysql');
+            
+            gi_log_error('Post converted to sheet row successfully', array('post_id' => $post_id, 'columns' => count($row)));
+            
+            return $row;
+            
+        } catch (Exception $e) {
+            gi_log_error('convert_post_to_sheet_row failed', array(
+                'post_id' => $post_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ));
             return false;
         }
-        
-        // 基本データ
-        $row = array(
-            $post_id, // ID
-            $post->post_title, // タイトル
-            $post->post_content, // 内容
-            $post->post_excerpt, // 抜粋
-            $post->post_status, // ステータス
-            $post->post_date, // 作成日
-            $post->post_modified, // 更新日
-        );
-        
-        // ACFフィールドを追加
-        $acf_fields = array(
-            'max_amount',              // 助成金額（表示用）
-            'max_amount_numeric',      // 助成金額（数値）
-            'deadline',                // 申請期限（表示用）
-            'deadline_date',           // 申請期限（日付）
-            'organization',            // 実施組織
-            'organization_type',       // 組織タイプ
-            'grant_target',            // 対象者・対象事業
-            'application_method',      // 申請方法
-            'contact_info',            // 問い合わせ先
-            'official_url',            // 公式URL
-            'target_prefecture',       // 対象都道府県（コード）
-            'prefecture_name',         // 都道府県名（表示用）
-            'target_municipality',     // 対象市町村
-            'regional_limitation',     // 地域制限
-            'application_status'       // 申請ステータス
-        );
-        
-        foreach ($acf_fields as $field) {
-            $value = get_field($field, $post_id);
-            $row[] = is_array($value) ? json_encode($value) : (string)$value;
-        }
-        
-        // カテゴリを追加
-        $categories = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
-        $row[] = is_array($categories) ? implode(', ', $categories) : '';
-        
-        // タグを追加
-        $tags = wp_get_post_terms($post_id, 'grant_tag', array('fields' => 'names'));
-        $row[] = is_array($tags) ? implode(', ', $tags) : '';
-        
-        return $row;
     }
     
     /**
      * スプレッドシートのヘッダー行を設定
      */
     public function setup_sheet_headers() {
-        $headers = array(
-            'ID',                    // A列
-            'タイトル',               // B列
-            '内容',                  // C列
-            '抜粋',                  // D列
-            'ステータス',             // E列
-            '作成日',                // F列
-            '更新日',                // G列
-            '助成金額（表示用）',      // H列
-            '助成金額（数値）',        // I列
-            '申請期限（表示用）',      // J列
-            '申請期限（日付）',        // K列
-            '実施組織',              // L列
-            '組織タイプ',            // M列
-            '対象者・対象事業',       // N列
-            '申請方法',              // O列
-            '問い合わせ先',          // P列
-            '公式URL',               // Q列
-            '都道府県コード',        // R列
-            '都道府県名',            // S列
-            '対象市町村',            // T列
-            '地域制限',              // U列
-            '申請ステータス',        // V列
-            'カテゴリ',              // W列
-            'タグ',                  // X列
-            'シート更新日'           // Y列
-        );
-        
-        return $this->write_sheet_data($this->sheet_name . '!A1:Y1', array($headers));
+        try {
+            gi_log_error('Setting up sheet headers');
+            
+            $headers = array(
+                'ID',                    // A列
+                'タイトル',               // B列
+                '内容',                  // C列
+                '抜粋',                  // D列
+                'ステータス',             // E列
+                '作成日',                // F列
+                '更新日',                // G列
+                '助成金額（表示用）',      // H列
+                '助成金額（数値）',        // I列
+                '申請期限（表示用）',      // J列
+                '申請期限（日付）',        // K列
+                '実施組織',              // L列
+                '組織タイプ',            // M列
+                '対象者・対象事業',       // N列
+                '申請方法',              // O列
+                '問い合わせ先',          // P列
+                '公式URL',               // Q列
+                '都道府県コード',        // R列
+                '都道府県名',            // S列
+                '対象市町村',            // T列
+                '地域制限',              // U列
+                '申請ステータス',        // V列
+                'カテゴリ',              // W列
+                'タグ',                  // X列
+                'シート更新日'           // Y列
+            );
+            
+            gi_log_error('Headers array created', array('count' => count($headers)));
+            
+            $range = $this->sheet_name . '!A1:Y1';
+            gi_log_error('Writing headers to range', array('range' => $range));
+            
+            $result = $this->write_sheet_data($range, array($headers));
+            
+            gi_log_error('Headers setup result', array('success' => $result));
+            
+            return $result;
+            
+        } catch (Exception $e) {
+            gi_log_error('setup_sheet_headers failed', array(
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ));
+            return false;
+        }
     }
     
     /**
      * 投稿保存時のスプレッドシート同期
      */
     public function sync_post_to_sheets($post_id, $post, $update) {
-        // 自動保存やリビジョンを除外
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
-            return;
-        }
-        
-        if (wp_is_post_revision($post_id)) {
-            return;
-        }
-        
-        // 助成金投稿のみ対象
-        if ($post->post_type !== 'grant') {
-            return;
-        }
-        
-        // 投稿データを変換
-        $row_data = $this->convert_post_to_sheet_row($post_id);
-        if (!$row_data) {
-            return;
-        }
-        
-        // スプレッドシート更新日を追加
-        $row_data[] = current_time('mysql');
-        
-        // スプレッドシートで該当行を検索
-        $sheet_data = $this->read_sheet_data();
-        $row_number = $this->find_post_row_in_sheet($post_id, $sheet_data);
-        
-        if ($row_number) {
-            // 既存行を更新
-            $range = $this->sheet_name . '!A' . $row_number . ':R' . $row_number;
-            $success = $this->write_sheet_data($range, array($row_data));
-        } else {
-            // 新しい行を追加
-            $success = $this->append_sheet_data($row_data);
-        }
-        
-        if ($success) {
-            gi_log_error('Post synced to sheets', array('post_id' => $post_id));
-        } else {
-            gi_log_error('Failed to sync post to sheets', array('post_id' => $post_id));
+        try {
+            gi_log_error('sync_post_to_sheets started', array('post_id' => $post_id, 'post_type' => $post->post_type));
+            
+            // 自動保存やリビジョンを除外
+            if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+                gi_log_error('Skipping autosave', array('post_id' => $post_id));
+                return;
+            }
+            
+            if (wp_is_post_revision($post_id)) {
+                gi_log_error('Skipping revision', array('post_id' => $post_id));
+                return;
+            }
+            
+            // 助成金投稿のみ対象
+            if ($post->post_type !== 'grant') {
+                gi_log_error('Skipping non-grant post', array('post_id' => $post_id, 'post_type' => $post->post_type));
+                return;
+            }
+            
+            // 投稿データを変換
+            gi_log_error('Converting post to sheet row', array('post_id' => $post_id));
+            $row_data = $this->convert_post_to_sheet_row($post_id);
+            if (!$row_data) {
+                throw new Exception('Failed to convert post data to sheet row');
+            }
+            
+            gi_log_error('Row data converted', array('post_id' => $post_id, 'columns' => count($row_data)));
+            
+            // スプレッドシートで該当行を検索
+            gi_log_error('Reading sheet data to find existing row');
+            $sheet_data = $this->read_sheet_data();
+            
+            if ($sheet_data === false) {
+                throw new Exception('Failed to read sheet data');
+            }
+            
+            gi_log_error('Sheet data read', array('rows' => count($sheet_data)));
+            
+            $row_number = $this->find_post_row_in_sheet($post_id, $sheet_data);
+            gi_log_error('Row search result', array('post_id' => $post_id, 'row_number' => $row_number));
+            
+            if ($row_number) {
+                // 既存行を更新 - 正しい列範囲（Y列まで）を使用
+                $range = $this->sheet_name . '!A' . $row_number . ':Y' . $row_number;
+                gi_log_error('Updating existing row', array('post_id' => $post_id, 'range' => $range));
+                $success = $this->write_sheet_data($range, array($row_data));
+            } else {
+                // 新しい行を追加
+                gi_log_error('Appending new row', array('post_id' => $post_id));
+                $success = $this->append_sheet_data($row_data);
+            }
+            
+            if ($success) {
+                gi_log_error('Post synced to sheets successfully', array('post_id' => $post_id));
+            } else {
+                throw new Exception('Failed to write data to sheets');
+            }
+            
+        } catch (Exception $e) {
+            gi_log_error('sync_post_to_sheets failed', array(
+                'post_id' => $post_id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ));
+            throw $e; // Re-throw to propagate the error up
         }
     }
     
