@@ -678,6 +678,852 @@ function testConnection() {
 }
 
 // =============================================================================
+// Jグランツ API連携機能  
+// =============================================================================
+
+/**
+ * JグランツAPIから補助金情報をスプレッドシートに反映
+ */
+function importJgrantsSubsidyData() {
+  const JGRANTS_API_BASE_URL = 'https://api.jgrants-portal.go.jp/exp/v1/public';
+  const SHEET_NAME = 'Jグランツ補助金情報';
+  
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 既存のシートがあれば削除して新規作成
+    let sheet;
+    try {
+      sheet = spreadsheet.getSheetByName(SHEET_NAME);
+      if (sheet) {
+        spreadsheet.deleteSheet(sheet);
+      }
+    } catch (e) {
+      // シートが存在しない場合は何もしない
+    }
+    
+    // 新しいシートを作成
+    sheet = spreadsheet.insertSheet(SHEET_NAME);
+    
+    // ヘッダー行を設定
+    const headers = [
+      'ID', '補助金名', 'タイトル', 'キャッチフレーズ', '詳細',
+      '利用目的', '業種', '対象地域（検索）', '対象地域（詳細）',
+      '従業員数', '補助率', '補助上限額', '募集開始日時',
+      '募集終了日時', '事業終了期限', '事前相談有無',
+      '複数回申請可否', '公募要領ファイル数', '交付要綱ファイル数',
+      '申請様式ファイル数', '取得日時'
+    ];
+    
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // ヘッダー行のスタイルを設定
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setBackground('#4285f4');
+    headerRange.setFontColor('white');
+    headerRange.setFontWeight('bold');
+    
+    // 全ての補助金情報を取得
+    const allSubsidyData = getAllSubsidyData(JGRANTS_API_BASE_URL);
+    
+    if (allSubsidyData.length === 0) {
+      Browser.msgBox('データが取得できませんでした。APIの状態を確認してください。');
+      return;
+    }
+    
+    // データをスプレッドシートに書き込み
+    const dataRows = allSubsidyData.map(subsidy => [
+      subsidy.id || '',
+      subsidy.name || '',
+      subsidy.title || '',
+      subsidy.subsidy_catch_phrase || '',
+      subsidy.detail || '',
+      subsidy.use_purpose || '',
+      subsidy.industry || '',
+      subsidy.target_area_search || '',
+      subsidy.target_area_detail || '',
+      subsidy.target_number_of_employees || '',
+      subsidy.subsidy_rate || '',
+      subsidy.subsidy_max_limit || '',
+      formatDateTime(subsidy.acceptance_start_datetime),
+      formatDateTime(subsidy.acceptance_end_datetime),
+      formatDateTime(subsidy.project_end_deadline),
+      subsidy.request_reception_presence || '',
+      subsidy.is_enable_multiple_request ? '可' : '不可',
+      (subsidy.application_guidelines && subsidy.application_guidelines.length) || 0,
+      (subsidy.outline_of_grant && subsidy.outline_of_grant.length) || 0,
+      (subsidy.application_form && subsidy.application_form.length) || 0,
+      new Date().toLocaleString('ja-JP')
+    ]);
+    
+    // データが存在する場合のみ書き込み
+    if (dataRows.length > 0) {
+      sheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
+      
+      // 列幅を自動調整
+      sheet.autoResizeColumns(1, headers.length);
+      
+      // フィルターを追加
+      sheet.getRange(1, 1, dataRows.length + 1, headers.length).createFilter();
+    }
+    
+    // 完了メッセージ
+    Browser.msgBox(
+      '完了',
+      `${dataRows.length}件の補助金情報を取得してスプレッドシートに反映しました。`,
+      Browser.Buttons.OK
+    );
+    
+  } catch (error) {
+    console.error('エラーが発生しました:', error);
+    Browser.msgBox('エラー', 'データ取得中にエラーが発生しました: ' + error.toString(), Browser.Buttons.OK);
+  }
+}
+
+/**
+ * 全ての補助金データを取得する関数
+ */
+function getAllSubsidyData(baseUrl) {
+  const allData = [];
+  let hasMoreData = true;
+  let offset = 0;
+  const limit = 100; // 一度に取得する件数
+  
+  while (hasMoreData) {
+    try {
+      console.log(`取得中... オフセット: ${offset}`);
+      
+      // 補助金一覧を取得（条件を最小限にして全件取得を目指す）
+      const listUrl = `${baseUrl}/subsidies`;
+      const params = {
+        'keyword': '補助', // 最小限のキーワード
+        'sort': 'created_date',
+        'order': 'DESC',
+        'acceptance': '0', // 募集期間外も含める
+        'offset': offset.toString(),
+        'limit': limit.toString()
+      };
+      
+      const queryString = Object.keys(params)
+        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+        .join('&');
+      
+      const fullUrl = `${listUrl}?${queryString}`;
+      
+      const response = UrlFetchApp.fetch(fullUrl, {
+        'method': 'GET',
+        'headers': {
+          'Accept': 'application/json',
+          'User-Agent': 'GoogleAppsScript'
+        },
+        'muteHttpExceptions': true
+      });
+      
+      if (response.getResponseCode() !== 200) {
+        console.error(`API呼び出しエラー: ${response.getResponseCode()}`);
+        break;
+      }
+      
+      const data = JSON.parse(response.getContentText());
+      
+      if (!data.result || data.result.length === 0) {
+        hasMoreData = false;
+        break;
+      }
+      
+      // 各補助金の詳細情報を取得
+      for (const subsidySummary of data.result) {
+        try {
+          const detailData = getSubsidyDetail(baseUrl, subsidySummary.id);
+          if (detailData) {
+            allData.push(detailData);
+          }
+          
+          // API制限を考慮して少し待機
+          Utilities.sleep(100);
+          
+        } catch (detailError) {
+          console.error(`詳細取得エラー (ID: ${subsidySummary.id}):`, detailError);
+          // 詳細が取得できない場合は一覧情報のみ使用
+          allData.push(subsidySummary);
+        }
+      }
+      
+      offset += data.result.length;
+      
+      // レスポンスデータが期待した件数より少ない場合は終了
+      if (data.result.length < limit) {
+        hasMoreData = false;
+      }
+      
+      // API制限を考慮して待機
+      Utilities.sleep(500);
+      
+    } catch (error) {
+      console.error(`データ取得エラー (オフセット: ${offset}):`, error);
+      hasMoreData = false;
+    }
+  }
+  
+  return allData;
+}
+
+/**
+ * 個別の補助金詳細情報を取得する関数
+ */
+function getSubsidyDetail(baseUrl, subsidyId) {
+  try {
+    const detailUrl = `${baseUrl}/subsidies/id/${subsidyId}`;
+    
+    const response = UrlFetchApp.fetch(detailUrl, {
+      'method': 'GET',
+      'headers': {
+        'Accept': 'application/json',
+        'User-Agent': 'GoogleAppsScript'
+      },
+      'muteHttpExceptions': true
+    });
+    
+    if (response.getResponseCode() !== 200) {
+      console.error(`詳細取得エラー (ID: ${subsidyId}): ${response.getResponseCode()}`);
+      return null;
+    }
+    
+    const data = JSON.parse(response.getContentText());
+    
+    if (data.result && data.result.length > 0) {
+      return data.result[0];
+    }
+    
+    return null;
+    
+  } catch (error) {
+    console.error(`詳細取得エラー (ID: ${subsidyId}):`, error);
+    return null;
+  }
+}
+
+/**
+ * 募集中の補助金のみを取得する関数
+ */
+function importActiveSubsidiesOnly() {
+  const JGRANTS_API_BASE_URL = 'https://api.jgrants-portal.go.jp/exp/v1/public';
+  const SHEET_NAME = '募集中補助金情報';
+  
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 既存のシートがあれば削除して新規作成
+    let sheet;
+    try {
+      sheet = spreadsheet.getSheetByName(SHEET_NAME);
+      if (sheet) {
+        spreadsheet.deleteSheet(sheet);
+      }
+    } catch (e) {
+      // シートが存在しない場合は何もしない
+    }
+    
+    sheet = spreadsheet.insertSheet(SHEET_NAME);
+    
+    // ヘッダー行を設定
+    const headers = [
+      'ID', '補助金名', 'タイトル', '対象地域', '補助上限額',
+      '募集開始日時', '募集終了日時', '従業員数', '取得日時'
+    ];
+    
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // ヘッダー行のスタイルを設定
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setBackground('#34a853');
+    headerRange.setFontColor('white');
+    headerRange.setFontWeight('bold');
+    
+    // 募集中の補助金情報を取得
+    const activeSubsidies = getActiveSubsidyData(JGRANTS_API_BASE_URL);
+    
+    if (activeSubsidies.length === 0) {
+      Browser.msgBox('募集中の補助金データが取得できませんでした。');
+      return;
+    }
+    
+    // データをスプレッドシートに書き込み
+    const dataRows = activeSubsidies.map(subsidy => [
+      subsidy.id || '',
+      subsidy.name || '',
+      subsidy.title || '',
+      subsidy.target_area_search || '',
+      subsidy.subsidy_max_limit || '',
+      formatDateTime(subsidy.acceptance_start_datetime),
+      formatDateTime(subsidy.acceptance_end_datetime),
+      subsidy.target_number_of_employees || '',
+      new Date().toLocaleString('ja-JP')
+    ]);
+    
+    if (dataRows.length > 0) {
+      sheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
+      sheet.autoResizeColumns(1, headers.length);
+      sheet.getRange(1, 1, dataRows.length + 1, headers.length).createFilter();
+    }
+    
+    Browser.msgBox(
+      '完了',
+      `${dataRows.length}件の募集中補助金情報を取得しました。`,
+      Browser.Buttons.OK
+    );
+    
+  } catch (error) {
+    console.error('エラーが発生しました:', error);
+    Browser.msgBox('エラー', 'データ取得中にエラーが発生しました: ' + error.toString(), Browser.Buttons.OK);
+  }
+}
+
+/**
+ * 募集中の補助金データを取得する関数
+ */
+function getActiveSubsidyData(baseUrl) {
+  try {
+    const listUrl = `${baseUrl}/subsidies`;
+    const params = {
+      'keyword': '補助',
+      'sort': 'acceptance_end_datetime',
+      'order': 'ASC',
+      'acceptance': '1' // 募集期間内のみ
+    };
+    
+    const queryString = Object.keys(params)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+      .join('&');
+    
+    const fullUrl = `${listUrl}?${queryString}`;
+    
+    const response = UrlFetchApp.fetch(fullUrl, {
+      'method': 'GET',
+      'headers': {
+        'Accept': 'application/json',
+        'User-Agent': 'GoogleAppsScript'
+      },
+      'muteHttpExceptions': true
+    });
+    
+    if (response.getResponseCode() !== 200) {
+      throw new Error(`API呼び出しエラー: ${response.getResponseCode()}`);
+    }
+    
+    const data = JSON.parse(response.getContentText());
+    return data.result || [];
+    
+  } catch (error) {
+    console.error('募集中データ取得エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * キーワード検索機能
+ */
+function searchSubsidiesByKeyword() {
+  const keyword = Browser.inputBox(
+    'キーワード検索',
+    '検索したいキーワードを入力してください（例：IT、デジタル、製造業）:',
+    Browser.Buttons.OK_CANCEL
+  );
+  
+  if (keyword === 'cancel' || !keyword.trim()) {
+    return;
+  }
+  
+  const JGRANTS_API_BASE_URL = 'https://api.jgrants-portal.go.jp/exp/v1/public';
+  const SHEET_NAME = `検索結果_${keyword}`;
+  
+  try {
+    const searchResults = searchSubsidyData(JGRANTS_API_BASE_URL, keyword.trim());
+    
+    if (searchResults.length === 0) {
+      Browser.msgBox('検索結果が見つかりませんでした。');
+      return;
+    }
+    
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 既存の検索結果シートがあれば削除
+    try {
+      const existingSheet = spreadsheet.getSheetByName(SHEET_NAME);
+      if (existingSheet) {
+        spreadsheet.deleteSheet(existingSheet);
+      }
+    } catch (e) {
+      // シートが存在しない場合は何もしない
+    }
+    
+    const sheet = spreadsheet.insertSheet(SHEET_NAME);
+    
+    // ヘッダー行を設定
+    const headers = [
+      'ID', '補助金名', 'タイトル', '詳細', '利用目的',
+      '業種', '対象地域', '従業員数', '補助上限額',
+      '募集開始日時', '募集終了日時', '取得日時'
+    ];
+    
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // ヘッダー行のスタイルを設定
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setBackground('#ff9900');
+    headerRange.setFontColor('white');
+    headerRange.setFontWeight('bold');
+    
+    // データをスプレッドシートに書き込み
+    const dataRows = searchResults.map(subsidy => [
+      subsidy.id || '',
+      subsidy.name || '',
+      subsidy.title || '',
+      subsidy.detail || '',
+      subsidy.use_purpose || '',
+      subsidy.industry || '',
+      subsidy.target_area_search || '',
+      subsidy.target_number_of_employees || '',
+      subsidy.subsidy_max_limit || '',
+      formatDateTime(subsidy.acceptance_start_datetime),
+      formatDateTime(subsidy.acceptance_end_datetime),
+      new Date().toLocaleString('ja-JP')
+    ]);
+    
+    if (dataRows.length > 0) {
+      sheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
+      sheet.autoResizeColumns(1, headers.length);
+      sheet.getRange(1, 1, dataRows.length + 1, headers.length).createFilter();
+    }
+    
+    Browser.msgBox(
+      '完了',
+      `キーワード「${keyword}」で${dataRows.length}件の補助金情報が見つかりました。`,
+      Browser.Buttons.OK
+    );
+    
+  } catch (error) {
+    console.error('検索エラー:', error);
+    Browser.msgBox('エラー', '検索中にエラーが発生しました: ' + error.toString(), Browser.Buttons.OK);
+  }
+}
+
+/**
+ * キーワード検索用データ取得関数
+ */
+function searchSubsidyData(baseUrl, keyword) {
+  try {
+    const listUrl = `${baseUrl}/subsidies`;
+    const params = {
+      'keyword': keyword,
+      'sort': 'created_date',
+      'order': 'DESC',
+      'acceptance': '0' // 全期間
+    };
+    
+    const queryString = Object.keys(params)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+      .join('&');
+    
+    const fullUrl = `${listUrl}?${queryString}`;
+    
+    const response = UrlFetchApp.fetch(fullUrl, {
+      'method': 'GET',
+      'headers': {
+        'Accept': 'application/json',
+        'User-Agent': 'GoogleAppsScript'
+      },
+      'muteHttpExceptions': true
+    });
+    
+    if (response.getResponseCode() !== 200) {
+      throw new Error(`API呼び出しエラー: ${response.getResponseCode()}`);
+    }
+    
+    const data = JSON.parse(response.getContentText());
+    const results = data.result || [];
+    
+    // 詳細情報を含む検索結果を取得
+    const detailedResults = [];
+    for (const subsidy of results) {
+      try {
+        const detailData = getSubsidyDetail(baseUrl, subsidy.id);
+        if (detailData) {
+          detailedResults.push(detailData);
+        } else {
+          detailedResults.push(subsidy);
+        }
+        Utilities.sleep(100);
+      } catch (error) {
+        console.error(`詳細取得エラー (ID: ${subsidy.id}):`, error);
+        detailedResults.push(subsidy);
+      }
+    }
+    
+    return detailedResults;
+    
+  } catch (error) {
+    console.error('検索データ取得エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * 日時フォーマット関数
+ */
+function formatDateTime(dateTimeString) {
+  if (!dateTimeString) {
+    return '';
+  }
+  
+  try {
+    const date = new Date(dateTimeString);
+    return date.toLocaleString('ja-JP');
+  } catch (error) {
+    return dateTimeString;
+  }
+}
+
+/**
+ * JグランツからWordPressに助成金データをインポート
+ * Jグランツで取得したデータを既存のWordPress連携シートに統合
+ */
+function importJgrantsToWordPress() {
+  try {
+    console.log('Starting Jグランツ to WordPress import...');
+    
+    // Jグランツデータを取得
+    const JGRANTS_API_BASE_URL = 'https://api.jgrants-portal.go.jp/exp/v1/public';
+    const jgrantsData = getActiveSubsidyData(JGRANTS_API_BASE_URL);
+    
+    if (jgrantsData.length === 0) {
+      Browser.msgBox('Jグランツから取得できるデータがありませんでした。');
+      return {
+        success: false,
+        message: 'No Jグランツ data available',
+        imported: 0
+      };
+    }
+    
+    // WordPress連携用のシートを取得または作成
+    const sheet = getOrCreateSheet();
+    
+    // ヘッダー行を設定（WordPress用の25列構造）
+    setupHeaders(sheet);
+    
+    // 既存データをクリア（ヘッダー以外）
+    clearExistingData(sheet);
+    
+    // JグランツデータをWordPress形式に変換
+    const wpFormatData = convertJgrantsToWordPressFormat(jgrantsData);
+    
+    // データをシートに書き込み
+    let importedCount = 0;
+    wpFormatData.forEach((rowData, index) => {
+      try {
+        const rowNumber = index + 2; // ヘッダー行の下から開始
+        const range = sheet.getRange(rowNumber, 1, 1, rowData.length);
+        range.setValues([rowData]);
+        importedCount++;
+      } catch (rowError) {
+        console.error(`Failed to import row ${index + 2}:`, rowError);
+      }
+    });
+    
+    console.log(`Jグランツ to WordPress import completed: ${importedCount} grants imported`);
+    
+    Browser.msgBox(
+      '完了',
+      `Jグランツから${importedCount}件の助成金をWordPress形式でインポートしました。`,
+      Browser.Buttons.OK
+    );
+    
+    return {
+      success: true,
+      message: `Jグランツ import completed successfully. ${importedCount} grants imported.`,
+      imported: importedCount
+    };
+    
+  } catch (error) {
+    console.error('Jグランツ to WordPress import failed:', error);
+    Browser.msgBox('エラー', 'Jグランツインポート中にエラーが発生しました: ' + error.toString(), Browser.Buttons.OK);
+    
+    return {
+      success: false,
+      message: `Jグランツ import failed: ${error.message}`,
+      imported: 0
+    };
+  }
+}
+
+/**
+ * JグランツデータをWordPress形式に変換
+ */
+function convertJgrantsToWordPressFormat(jgrantsData) {
+  return jgrantsData.map(grant => [
+    '', // ID (WordPressが自動生成)
+    grant.name || grant.title || '無題の助成金', // タイトル
+    grant.detail || '詳細情報が利用できません', // 内容  
+    grant.subsidy_catch_phrase || '助成金の概要', // 抜粋
+    'draft', // ステータス（一旦下書きで作成）
+    '', // 作成日（WordPressが自動設定）
+    '', // 更新日（WordPressが自動設定）
+    grant.subsidy_max_limit || '金額要確認', // 助成金額（表示用）
+    extractNumericAmount(grant.subsidy_max_limit), // 助成金額（数値）
+    formatDateTime(grant.acceptance_end_datetime) || '期限要確認', // 申請期限（表示用）
+    extractDateFromString(grant.acceptance_end_datetime), // 申請期限（日付）
+    grant.organizer_name || '実施団体要確認', // 実施組織
+    'jgrants', // 組織タイプ（Jグランツ由来を示す）
+    grant.use_purpose || grant.target_area_detail || '対象要確認', // 対象者・対象事業
+    'online', // 申請方法（Jグランツは基本オンライン）
+    grant.contact_information || 'Jグランツサイトを確認', // 問い合わせ先
+    `https://www.jgrants-portal.go.jp/grants/detail/${grant.id}`, // 公式URL
+    extractPrefectureCode(grant.target_area_search), // 都道府県コード
+    extractPrefectureName(grant.target_area_search), // 都道府県名
+    grant.target_area_detail || '全域', // 対象市町村
+    determineAreaRestriction(grant.target_area_search), // 地域制限
+    determineApplicationStatus(grant.acceptance_start_datetime, grant.acceptance_end_datetime), // 申請ステータス
+    '政府系助成金, Jグランツ', // カテゴリ
+    extractTags(grant), // タグ
+    new Date().toISOString().substring(0, 19).replace('T', ' ') // シート更新日
+  ]);
+}
+
+/**
+ * 文字列から数値の金額を抽出
+ */
+function extractNumericAmount(amountString) {
+  if (!amountString) return 0;
+  
+  // 数字のみを抽出
+  const numbers = amountString.replace(/[^\d]/g, '');
+  
+  if (!numbers) return 0;
+  
+  let amount = parseInt(numbers);
+  
+  // 単位を考慮した調整
+  if (amountString.includes('億')) {
+    amount = amount * 100000000;
+  } else if (amountString.includes('千万')) {
+    amount = amount * 10000000;
+  } else if (amountString.includes('万')) {
+    amount = amount * 10000;
+  } else if (amountString.includes('千')) {
+    amount = amount * 1000;
+  }
+  
+  return amount;
+}
+
+/**
+ * 日付文字列からYYYY-MM-DD形式を抽出
+ */
+function extractDateFromString(dateString) {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    return date.toISOString().substring(0, 10);
+  } catch (error) {
+    return '';
+  }
+}
+
+/**
+ * 地域名から都道府県コードを推定
+ */
+function extractPrefectureCode(areaString) {
+  if (!areaString) return 'nationwide';
+  
+  const prefCodes = {
+    '北海道': 'hokkaido', '青森': 'aomori', '岩手': 'iwate', '宮城': 'miyagi',
+    '秋田': 'akita', '山形': 'yamagata', '福島': 'fukushima', '茨城': 'ibaraki',
+    '栃木': 'tochigi', '群馬': 'gunma', '埼玉': 'saitama', '千葉': 'chiba',
+    '東京': 'tokyo', '神奈川': 'kanagawa', '新潟': 'niigata', '富山': 'toyama',
+    '石川': 'ishikawa', '福井': 'fukui', '山梨': 'yamanashi', '長野': 'nagano',
+    '岐阜': 'gifu', '静岡': 'shizuoka', '愛知': 'aichi', '三重': 'mie',
+    '滋賀': 'shiga', '京都': 'kyoto', '大阪': 'osaka', '兵庫': 'hyogo',
+    '奈良': 'nara', '和歌山': 'wakayama', '鳥取': 'tottori', '島根': 'shimane',
+    '岡山': 'okayama', '広島': 'hiroshima', '山口': 'yamaguchi', '徳島': 'tokushima',
+    '香川': 'kagawa', '愛媛': 'ehime', '高知': 'kochi', '福岡': 'fukuoka',
+    '佐賀': 'saga', '長崎': 'nagasaki', '熊本': 'kumamoto', '大分': 'oita',
+    '宮崎': 'miyazaki', '鹿児島': 'kagoshima', '沖縄': 'okinawa'
+  };
+  
+  for (const [name, code] of Object.entries(prefCodes)) {
+    if (areaString.includes(name)) {
+      return code;
+    }
+  }
+  
+  return 'nationwide';
+}
+
+/**
+ * 都道府県名を抽出
+ */
+function extractPrefectureName(areaString) {
+  if (!areaString) return '全国';
+  
+  const prefectures = [
+    '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+    '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+    '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
+    '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
+    '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+    '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+    '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
+  ];
+  
+  for (const pref of prefectures) {
+    if (areaString.includes(pref)) {
+      return pref;
+    }
+  }
+  
+  return '全国';
+}
+
+/**
+ * 地域制限を決定
+ */
+function determineAreaRestriction(areaString) {
+  if (!areaString || areaString.includes('全国')) {
+    return 'nationwide';
+  }
+  
+  if (areaString.includes('県') || areaString.includes('都') || areaString.includes('府') || areaString.includes('道')) {
+    return 'prefecture';
+  }
+  
+  if (areaString.includes('市') || areaString.includes('町') || areaString.includes('村')) {
+    return 'city';
+  }
+  
+  return 'other';
+}
+
+/**
+ * 申請ステータスを決定
+ */
+function determineApplicationStatus(startDate, endDate) {
+  const now = new Date();
+  
+  if (!startDate || !endDate) {
+    return 'unknown';
+  }
+  
+  try {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (now < start) {
+      return 'upcoming';
+    } else if (now >= start && now <= end) {
+      return 'open';
+    } else {
+      return 'closed';
+    }
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
+/**
+ * タグを抽出して生成
+ */
+function extractTags(grant) {
+  const tags = ['Jグランツ'];
+  
+  if (grant.industry) {
+    tags.push(grant.industry);
+  }
+  
+  if (grant.use_purpose) {
+    tags.push(grant.use_purpose);
+  }
+  
+  if (grant.subsidy_rate && grant.subsidy_rate.includes('100%')) {
+    tags.push('全額補助');
+  }
+  
+  if (grant.target_number_of_employees) {
+    tags.push('従業員数制限あり');
+  }
+  
+  return tags.join(', ');
+}
+
+/**
+ * メニューに機能を追加（統合版）
+ */
+function onOpen() {
+  try {
+    const ui = SpreadsheetApp.getUi();
+    ui.createMenu('🚀 助成金統合管理')
+      .addSubMenu(ui.createMenu('📊 WordPress連携')
+        .addItem('🔄 WordPressからデータインポート', 'importGrantPosts')
+        .addItem('⚙️ スプレッドシート初期化', 'initializeSheet')  
+        .addItem('📤 WordPressに全データ同期', 'manualFullSync')
+        .addItem('🔗 WordPress接続テスト', 'testConnection'))
+      .addSubMenu(ui.createMenu('🏛️ Jグランツ連携')
+        .addItem('📋 全補助金情報を取得', 'importJgrantsSubsidyData')
+        .addItem('🔥 募集中の補助金のみ取得', 'importActiveSubsidiesOnly')
+        .addItem('🔍 キーワード検索', 'searchSubsidiesByKeyword')
+        .addItem('🔄 JグランツからWordPressに統合', 'importJgrantsToWordPress'))
+      .addSubMenu(ui.createMenu('⚙️ システム管理')
+        .addItem('🔧 トリガー設定', 'setupTriggers')
+        .addItem('ℹ️ ヘルプ', 'showHelp'))
+      .addToUi();
+    
+    console.log('統合メニューが正常に作成されました');
+  } catch (error) {
+    console.error('メニュー作成エラー:', error);
+    Browser.msgBox('エラー', 'メニューの作成に失敗しました: ' + error.toString(), Browser.Buttons.OK);
+  }
+}
+
+/**
+ * ヘルプ機能（統合版）
+ */
+function showHelp() {
+  const helpText = `
+【助成金統合管理システムの使い方】
+
+📊 WordPress連携機能
+🔄 WordPressからデータインポート: サイトの助成金データをスプレッドシートにインポート
+⚙️ スプレッドシート初期化: WordPress連携用のヘッダーとサンプルデータを設定
+📤 WordPressに全データ同期: スプレッドシートの内容をWordPressに一括同期
+🔗 WordPress接続テスト: WordPress連携の接続状況を確認
+
+🏛️ Jグランツ連携機能
+📋 全補助金情報を取得: JグランツAPIから全ての補助金データを取得
+🔥 募集中の補助金のみ取得: 現在募集中の補助金のみを取得
+🔍 キーワード検索: 特定キーワードで補助金を検索
+🔄 JグランツからWordPressに統合: JグランツデータをWordPress形式で統合
+
+⚙️ システム管理
+🔧 トリガー設定: 自動同期のためのトリガーを設定
+ℹ️ ヘルプ: この説明を表示
+
+【推奨ワークフロー】
+1. 最初にWordPress連携の接続テストを実行
+2. スプレッドシート初期化でWordPress連携用の構造を作成
+3. WordPressからデータインポートで既存データを取得
+4. 必要に応じてJグランツからデータを追加取得・統合
+5. トリガー設定で自動同期を有効化
+
+※初回実行時は時間がかかる場合があります
+※API制限により、大量データ取得時は段階的に実行されます
+  `;
+  
+  Browser.msgBox('助成金統合管理システム ヘルプ', helpText, Browser.Buttons.OK);
+}
+
+// =============================================================================
 // 実行方法の説明
 // =============================================================================
 
