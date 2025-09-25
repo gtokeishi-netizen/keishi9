@@ -36,12 +36,16 @@ $required_files = array(
     // Admin interface files  
     'admin/admin-customization.php',  // 管理画面カスタマイズ
     'admin/fields-configuration.php', // ACF設定とフィールド定義
+    'admin/sheets-admin-ui.php',     // Google Sheets管理UI
     
     // Feature files
     'features/card-rendering.php',       // カードレンダリング・表示機能
     'features/ajax-handlers.php',        // AJAX処理
     'features/search-integration.php',   // AI機能・検索履歴
-    'features/enhanced-ai-generator.php' // 高度なAI生成機能
+    'features/enhanced-ai-generator.php', // 高度なAI生成機能
+    'features/google-sheets-sync.php',   // Google Sheets統合
+    'features/sheets-webhook.php',       // Webhook処理
+    'features/sheets-initializer.php'    // スプレッドシート初期化
 );
 
 // 各ファイルを安全に読み込み
