@@ -183,6 +183,20 @@ class GoogleSheetsSync {
     }
     
     /**
+     * シート名を取得
+     */
+    public function get_sheet_name() {
+        return $this->sheet_name;
+    }
+    
+    /**
+     * スプレッドシートIDを取得
+     */
+    public function get_spreadsheet_id() {
+        return $this->spreadsheet_id;
+    }
+    
+    /**
      * JWT（JSON Web Token）を作成
      */
     private function create_jwt() {
@@ -792,13 +806,20 @@ class GoogleSheetsSync {
     public function sync_all_posts_to_sheets() {
         gi_log_error('Starting sync_all_posts_to_sheets');
         
+        // バッチサイズを制限（一度に20件まで）
+        $batch_size = 20;
         $posts = get_posts(array(
             'post_type' => 'grant',
             'post_status' => array('publish', 'draft', 'private'),
-            'numberposts' => -1
+            'numberposts' => $batch_size
         ));
         
         gi_log_error('Found posts to sync', array('count' => count($posts)));
+        
+        if (empty($posts)) {
+            gi_log_error('No posts found to sync');
+            return 0;
+        }
         
         // ヘッダーを設定
         gi_log_error('Setting up sheet headers');
@@ -809,14 +830,17 @@ class GoogleSheetsSync {
             throw new Exception('ヘッダーの設定に失敗しました');
         }
         
-        $synced_count = 0;
+        // 一括でデータを準備
+        $batch_data = array();
         foreach ($posts as $post) {
             try {
-                gi_log_error('Syncing post', array('post_id' => $post->ID, 'title' => $post->post_title));
-                $this->sync_post_to_sheets($post->ID, $post, true);
-                $synced_count++;
+                gi_log_error('Preparing post data', array('post_id' => $post->ID, 'title' => $post->post_title));
+                $row_data = $this->convert_post_to_sheet_row($post->ID);
+                if ($row_data) {
+                    $batch_data[] = $row_data;
+                }
             } catch (Exception $e) {
-                gi_log_error('Failed to sync individual post', array(
+                gi_log_error('Failed to prepare individual post', array(
                     'post_id' => $post->ID,
                     'error' => $e->getMessage()
                 ));
@@ -825,13 +849,37 @@ class GoogleSheetsSync {
             }
         }
         
-        gi_log_error('Completed sync_all_posts_to_sheets', array('synced_count' => $synced_count));
+        // 一括でスプレッドシートに書き込み
+        if (!empty($batch_data)) {
+            gi_log_error('Writing batch data to sheets', array('batch_count' => count($batch_data)));
+            
+            $sheet_name = $this->get_sheet_name();
+            $start_row = 2; // ヘッダー行の次から
+            $end_row = $start_row + count($batch_data) - 1;
+            $range = $sheet_name . "!A{$start_row}:Y{$end_row}";
+            
+            $result = $this->write_sheet_data($range, $batch_data);
+            
+            if ($result) {
+                gi_log_error('Batch write successful', array('synced_count' => count($batch_data)));
+                return count($batch_data);
+            } else {
+                throw new Exception('一括書き込みに失敗しました');
+            }
+        }
+        
+        gi_log_error('No data to sync');
+        return 0;
     }
     
     /**
      * 手動同期のAJAXハンドラー
      */
     public function ajax_manual_sync() {
+        // タイムアウトとメモリ制限の拡張
+        set_time_limit(300); // 5分
+        ini_set('memory_limit', '256M');
+        
         // 全体をtry-catchでラップして500エラーを防ぐ
         try {
             // デバッグ: AJAXリクエストが到達したことをログに記録

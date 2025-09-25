@@ -131,8 +131,9 @@ class SheetsInitializer {
         
         // ヘッダー行を書き込み
         $header_values = array_keys($headers);
+        $sheet_name = $this->sheets_sync->get_sheet_name();
         $result = $this->sheets_sync->write_sheet_data(
-            $this->sheets_sync->sheet_name . '!A1:Y1', 
+            $sheet_name . '!A1:Y1', 
             array($header_values)
         );
         
@@ -143,7 +144,7 @@ class SheetsInitializer {
         // 2行目に説明を追加
         $descriptions = array_values($headers);
         $this->sheets_sync->write_sheet_data(
-            $this->sheets_sync->sheet_name . '!A2:Y2', 
+            $sheet_name . '!A2:Y2', 
             array($descriptions)
         );
         
@@ -208,8 +209,9 @@ class SheetsInitializer {
             '' // シート更新日（空欄）
         );
         
+        $sheet_name = $this->sheets_sync->get_sheet_name();
         $this->sheets_sync->write_sheet_data(
-            $this->sheets_sync->sheet_name . '!A3:Y3', 
+            $sheet_name . '!A3:Y3', 
             array($validation_samples)
         );
         
@@ -245,7 +247,8 @@ class SheetsInitializer {
         if (!empty($rows)) {
             // 一括で書き込み
             $end_row = $start_row + count($rows) - 1;
-            $range = $this->sheets_sync->sheet_name . "!A{$start_row}:Y{$end_row}";
+            $sheet_name = $this->sheets_sync->get_sheet_name();
+            $range = $sheet_name . "!A{$start_row}:Y{$end_row}";
             
             $result = $this->sheets_sync->write_sheet_data($range, $rows);
             
@@ -376,6 +379,10 @@ class SheetsInitializer {
      * AJAX: スプレッドシート初期化
      */
     public function ajax_initialize_sheet() {
+        // タイムアウトとメモリ制限の拡張
+        set_time_limit(300); // 5分
+        ini_set('memory_limit', '256M');
+        
         try {
             gi_log_error('AJAX initialize_sheet started', array(
                 'user_id' => get_current_user_id(),
