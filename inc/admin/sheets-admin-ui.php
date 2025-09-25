@@ -450,6 +450,9 @@ class SheetsAdminUI {
      * 同期ログを表示
      */
     private function display_sync_log() {
+        // Repair any existing log data issues
+        self::repair_log_data();
+        
         $logs = get_option('gi_sheets_sync_log', array());
         
         if (empty($logs)) {
@@ -464,7 +467,23 @@ class SheetsAdminUI {
         echo '<div class="gi-log-container">';
         foreach ($logs as $log) {
             $class = 'gi-log-' . esc_attr($log['level']);
-            $time = date('Y-m-d H:i:s', $log['timestamp']);
+            
+            // Safely handle timestamp conversion
+            $timestamp = $log['timestamp'];
+            if (is_string($timestamp)) {
+                // If it's already a formatted date string, use it directly
+                if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $timestamp)) {
+                    $time = $timestamp;
+                } else {
+                    // Try to convert string timestamp to int
+                    $timestamp = (int) $timestamp;
+                    $time = $timestamp > 0 ? date('Y-m-d H:i:s', $timestamp) : 'Invalid Date';
+                }
+            } else {
+                // Handle integer timestamp
+                $time = is_numeric($timestamp) && $timestamp > 0 ? date('Y-m-d H:i:s', (int)$timestamp) : 'Invalid Date';
+            }
+            
             echo '<div class="gi-log-entry ' . $class . '">';
             echo '<span class="gi-log-time">' . esc_html($time) . '</span>';
             echo '<span class="gi-log-message">' . esc_html($log['message']) . '</span>';
@@ -478,6 +497,21 @@ class SheetsAdminUI {
      */
     public static function add_log_entry($message, $level = 'info') {
         $logs = get_option('gi_sheets_sync_log', array());
+        
+        // Clean up any existing log entries with invalid timestamps
+        $logs = array_filter($logs, function($log) {
+            return isset($log['timestamp']) && isset($log['level']) && isset($log['message']);
+        });
+        
+        // Ensure all existing timestamps are integers
+        foreach ($logs as &$log) {
+            if (is_string($log['timestamp']) && is_numeric($log['timestamp'])) {
+                $log['timestamp'] = (int) $log['timestamp'];
+            } elseif (!is_int($log['timestamp'])) {
+                $log['timestamp'] = time(); // Fallback to current time
+            }
+        }
+        unset($log); // Break reference
         
         $logs[] = array(
             'timestamp' => time(),
@@ -498,6 +532,38 @@ class SheetsAdminUI {
      */
     public function clear_log() {
         delete_option('gi_sheets_sync_log');
+    }
+    
+    /**
+     * ログデータを修復（既存の不正なタイムスタンプを修正）
+     */
+    public static function repair_log_data() {
+        $logs = get_option('gi_sheets_sync_log', array());
+        $repaired = false;
+        
+        foreach ($logs as &$log) {
+            if (isset($log['timestamp']) && is_string($log['timestamp'])) {
+                if (is_numeric($log['timestamp'])) {
+                    $log['timestamp'] = (int) $log['timestamp'];
+                    $repaired = true;
+                } elseif (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $log['timestamp'])) {
+                    // Convert date string to timestamp
+                    $log['timestamp'] = strtotime($log['timestamp']);
+                    $repaired = true;
+                } else {
+                    // Invalid timestamp, use current time
+                    $log['timestamp'] = time();
+                    $repaired = true;
+                }
+            }
+        }
+        unset($log); // Break reference
+        
+        if ($repaired) {
+            update_option('gi_sheets_sync_log', $logs);
+        }
+        
+        return $repaired;
     }
 }
 
