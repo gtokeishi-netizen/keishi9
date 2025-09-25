@@ -38,23 +38,23 @@ class SheetsAdminUI {
      * 管理画面メニューに追加
      */
     public function add_admin_menu() {
-        // 助成金投稿タイプが存在するかチェック
+        // デバッグ用: 必ず設定メニューの下に追加
+        add_options_page(
+            'Google Sheets連携',
+            'Sheets連携',
+            'edit_posts', // 権限を緩和
+            'grant-sheets-sync',
+            array($this, 'admin_page')
+        );
+        
+        // 助成金投稿タイプが存在する場合は、そちらにも追加
         if (post_type_exists('grant')) {
             add_submenu_page(
                 'edit.php?post_type=grant',
                 'Google Sheets連携',
                 'Sheets連携',
-                'manage_options',
-                'grant-sheets-sync',
-                array($this, 'admin_page')
-            );
-        } else {
-            // フォールバック: 設定メニューの下に追加
-            add_options_page(
-                'Google Sheets連携',
-                'Sheets連携',
-                'manage_options',
-                'grant-sheets-sync',
+                'edit_posts', // 権限を緩和
+                'grant-sheets-sync-grant',
                 array($this, 'admin_page')
             );
         }
@@ -491,10 +491,16 @@ function gi_init_sheets_admin_ui() {
     return SheetsAdminUI::getInstance();
 }
 
-// デバッグ用: 管理画面メニューの追加をログ
+// デバッグ用: メニュー追加の確認通知
 add_action('admin_notices', function() {
-    if (current_user_can('manage_options') && isset($_GET['page']) && $_GET['page'] === 'grant-sheets-sync') {
-        // メニューが正常に表示されていることを確認
+    if (current_user_can('edit_posts') && !isset($_GET['page'])) {
+        echo '<div class="notice notice-info is-dismissible">';
+        echo '<p><strong>Google Sheets連携:</strong> ';
+        echo '設定は「<a href="' . admin_url('options-general.php?page=grant-sheets-sync') . '">設定 → Sheets連携</a>」から利用できます。';
+        if (post_type_exists('grant')) {
+            echo ' または「<a href="' . admin_url('edit.php?post_type=grant&page=grant-sheets-sync-grant') . '">助成金 → Sheets連携</a>」からもアクセスできます。';
+        }
+        echo '</p></div>';
     }
 });
 

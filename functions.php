@@ -95,6 +95,204 @@ function gi_final_init() {  // ✅ 修正
 }
 add_action('wp_loaded', 'gi_final_init', 999);
 
+/**
+ * Google Sheets管理メニューを直接追加（フォールバック）
+ */
+function gi_add_sheets_admin_menu() {
+    // 助成金投稿タイプの下に追加を試行
+    if (post_type_exists('grant')) {
+        add_submenu_page(
+            'edit.php?post_type=grant',
+            'Google Sheets連携',
+            'Sheets連携',
+            'manage_options',
+            'gi-sheets-sync',
+            'gi_sheets_admin_page'
+        );
+    }
+    
+    // 設定メニューの下にも追加（確実に表示させるため）
+    add_options_page(
+        'Google Sheets連携',
+        'Google Sheets連携',
+        'manage_options',
+        'gi-sheets-sync-settings',
+        'gi_sheets_admin_page'
+    );
+}
+add_action('admin_menu', 'gi_add_sheets_admin_menu');
+
+/**
+ * Google Sheets管理ページのコンテンツ
+ */
+function gi_sheets_admin_page() {
+    ?>
+    <div class="wrap">
+        <h1>Google Sheets連携設定</h1>
+        
+        <div class="notice notice-info">
+            <p><strong>設定画面が正常に表示されました！</strong></p>
+            <p>Google Sheets統合機能が利用可能です。</p>
+        </div>
+        
+        <!-- 接続テスト -->
+        <div class="card">
+            <h2>接続テスト</h2>
+            <p>Google Sheetsへの接続をテストします。</p>
+            <button type="button" id="test-sheets-connection" class="button button-primary">接続をテスト</button>
+            <div id="connection-result" style="margin-top: 10px;"></div>
+        </div>
+        
+        <!-- 手動同期 -->
+        <div class="card">
+            <h2>手動同期</h2>
+            <p>WordPressとGoogle Sheetsのデータを手動で同期します。</p>
+            <button type="button" id="sync-both" class="button button-primary">双方向同期</button>
+            <button type="button" id="sync-wp-to-sheets" class="button">WordPress → Sheets</button>
+            <button type="button" id="sync-sheets-to-wp" class="button">Sheets → WordPress</button>
+            <div id="sync-result" style="margin-top: 10px;"></div>
+        </div>
+        
+        <!-- スプレッドシート情報 -->
+        <div class="card">
+            <h2>スプレッドシート情報</h2>
+            <table class="form-table">
+                <tr>
+                    <th>スプレッドシートID</th>
+                    <td><code>1kGc1Eb4AYvURkSfdzMwipNjfe8xC6iGCM2q1sUgIfWg</code></td>
+                </tr>
+                <tr>
+                    <th>シート名</th>
+                    <td><code>grant_import</code></td>
+                </tr>
+                <tr>
+                    <th>サービスアカウント</th>
+                    <td><code>grant-sheets-service@grant-sheets-integration.iam.gserviceaccount.com</code></td>
+                </tr>
+                <tr>
+                    <th>スプレッドシートURL</th>
+                    <td><a href="https://docs.google.com/spreadsheets/d/1kGc1Eb4AYvURkSfdzMwipNjfe8xC6iGCM2q1sUgIfWg/edit#gid=706632810" target="_blank">スプレッドシートを開く</a></td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- 初期化 -->
+        <div class="card">
+            <h2>スプレッドシート初期化</h2>
+            <p>スプレッドシートにヘッダー行を設定し、既存投稿をエクスポートします。</p>
+            <button type="button" id="initialize-sheet" class="button button-secondary">スプレッドシートを初期化</button>
+            <button type="button" id="export-posts" class="button button-secondary">全投稿をエクスポート</button>
+        </div>
+    </div>
+    
+    <script>
+    jQuery(document).ready(function($) {
+        // 接続テスト
+        $('#test-sheets-connection').on('click', function() {
+            var $btn = $(this);
+            var $result = $('#connection-result');
+            
+            $btn.prop('disabled', true).text('テスト中...');
+            
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'gi_test_sheets_connection',
+                    nonce: '<?php echo wp_create_nonce('gi_sheets_nonce'); ?>'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $result.html('<div class="notice notice-success"><p>' + response.data + '</p></div>');
+                    } else {
+                        $result.html('<div class="notice notice-error"><p>' + response.data + '</p></div>');
+                    }
+                },
+                error: function() {
+                    $result.html('<div class="notice notice-error"><p>接続テストに失敗しました。</p></div>');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).text('接続をテスト');
+                }
+            });
+        });
+        
+        // 同期ボタン
+        $('.card button[id^="sync"]').on('click', function() {
+            var $btn = $(this);
+            var action = $btn.attr('id').replace('sync-', '').replace('-', '_');
+            var $result = $('#sync-result');
+            
+            $btn.prop('disabled', true).text('同期中...');
+            
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'gi_manual_sheets_sync',
+                    direction: action,
+                    nonce: '<?php echo wp_create_nonce('gi_sheets_nonce'); ?>'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $result.html('<div class="notice notice-success"><p>' + response.data + '</p></div>');
+                    } else {
+                        $result.html('<div class="notice notice-error"><p>' + response.data + '</p></div>');
+                    }
+                },
+                error: function() {
+                    $result.html('<div class="notice notice-error"><p>同期に失敗しました。</p></div>');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).text($btn.text().replace('中', ''));
+                }
+            });
+        });
+        
+        // 初期化ボタン
+        $('#initialize-sheet').on('click', function() {
+            if (!confirm('スプレッドシートを初期化しますか？')) return;
+            
+            var $btn = $(this);
+            $btn.prop('disabled', true).text('初期化中...');
+            
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'gi_initialize_sheet',
+                    nonce: '<?php echo wp_create_nonce('gi_sheets_nonce'); ?>'
+                },
+                success: function(response) {
+                    alert(response.success ? response.data : 'エラー: ' + response.data);
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).text('スプレッドシートを初期化');
+                }
+            });
+        });
+    });
+    </script>
+    
+    <style>
+    .card {
+        background: #fff;
+        border: 1px solid #c3c4c7;
+        border-radius: 4px;
+        margin: 20px 0;
+        padding: 20px;
+        box-shadow: 0 1px 1px rgba(0,0,0,.04);
+    }
+    .card h2 {
+        margin-top: 0;
+    }
+    .button {
+        margin-right: 10px;
+    }
+    </style>
+    <?php
+}
+
 // Excel管理機能は削除済み - 権限バイパスコードも不要
 
 
