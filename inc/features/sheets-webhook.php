@@ -247,7 +247,9 @@ class SheetsWebhookHandler {
         $this->update_taxonomies($post_id, $row_data);
         
         // ログ追加
-        SheetsAdminUI::add_log_entry("投稿 ID:{$post_id} をWebhookで更新しました", 'success');
+        if (class_exists('SheetsAdminUI') && method_exists('SheetsAdminUI', 'add_log_entry')) {
+            SheetsAdminUI::add_log_entry("投稿 ID:{$post_id} をWebhookで更新しました", 'success');
+        }
         
         return array(
             'success' => true,
@@ -290,7 +292,9 @@ class SheetsWebhookHandler {
         wp_schedule_single_event(time() + 10, 'gi_update_sheet_id', array($post_id, $payload['row_number']));
         
         // ログ追加
-        SheetsAdminUI::add_log_entry("投稿 ID:{$post_id} をWebhookで作成しました", 'success');
+        if (class_exists('SheetsAdminUI') && method_exists('SheetsAdminUI', 'add_log_entry')) {
+            SheetsAdminUI::add_log_entry("投稿 ID:{$post_id} をWebhookで作成しました", 'success');
+        }
         
         return array(
             'success' => true,
@@ -322,7 +326,9 @@ class SheetsWebhookHandler {
         }
         
         // ログ追加
-        SheetsAdminUI::add_log_entry("投稿 ID:{$post_id} をWebhookで削除しました", 'success');
+        if (class_exists('SheetsAdminUI') && method_exists('SheetsAdminUI', 'add_log_entry')) {
+            SheetsAdminUI::add_log_entry("投稿 ID:{$post_id} をWebhookで削除しました", 'success');
+        }
         
         return array(
             'success' => true,
@@ -373,7 +379,9 @@ class SheetsWebhookHandler {
         }
         
         // ログ追加
-        SheetsAdminUI::add_log_entry("一括更新完了: 成功 {$success_count}件, エラー {$error_count}件", 'info');
+        if (class_exists('SheetsAdminUI') && method_exists('SheetsAdminUI', 'add_log_entry')) {
+            SheetsAdminUI::add_log_entry("一括更新完了: 成功 {$success_count}件, エラー {$error_count}件", 'info');
+        }
         
         return array(
             'success' => true,
@@ -503,7 +511,9 @@ class SheetsWebhookHandler {
         $sheets_sync->write_sheet_data($range, array(array($post_id)));
         
         // ログ追加
-        SheetsAdminUI::add_log_entry("投稿ID {$post_id} をスプレッドシートに書き戻しました", 'info');
+        if (class_exists('SheetsAdminUI') && method_exists('SheetsAdminUI', 'add_log_entry')) {
+            SheetsAdminUI::add_log_entry("投稿ID {$post_id} をスプレッドシートに書き戻しました", 'info');
+        }
     }
 }
 

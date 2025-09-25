@@ -222,6 +222,10 @@ class SheetsAdminUI {
                     
                     <?php
                     // Webhookハンドラーが利用可能かチェック
+                    $webhook_url = home_url('/?gi_sheets_webhook=true');
+                    $rest_webhook_url = rest_url('gi/v1/sheets-webhook');
+                    $secret = wp_generate_password(32, false);
+                    
                     try {
                         if (class_exists('SheetsWebhookHandler')) {
                             $webhook_handler = SheetsWebhookHandler::getInstance();
@@ -229,20 +233,11 @@ class SheetsAdminUI {
                                 $webhook_url = $webhook_handler->get_webhook_url();
                                 $rest_webhook_url = $webhook_handler->get_rest_webhook_url();
                                 $secret = $webhook_handler->get_webhook_secret();
-                            } else {
-                                throw new Exception('Webhook methods not available');
                             }
-                        } else {
-                            throw new Exception('SheetsWebhookHandler class not found');
                         }
                     } catch (Exception $e) {
-                        // フォールバック値を設定
-                        $webhook_url = home_url('/?gi_sheets_webhook=true');
-                        $rest_webhook_url = rest_url('gi/v1/sheets-webhook');
-                        $secret = wp_generate_password(32, false);
-                        
-                        // エラーログに記録
-                        error_log('Webhook handler error: ' . $e->getMessage());
+                        // エラーログに記録（フォールバック値を使用）
+                        error_log('Webhook handler initialization failed, using fallback values: ' . $e->getMessage());
                     }
                     ?>
                     
@@ -540,8 +535,28 @@ add_action('admin_notices', function() {
 if (is_admin()) {
     // WordPressが完全に初期化された後に実行
     add_action('admin_init', function() {
-        if (function_exists('gi_init_sheets_admin_ui')) {
-            gi_init_sheets_admin_ui();
+        try {
+            if (function_exists('gi_init_sheets_admin_ui') && class_exists('SheetsAdminUI')) {
+                gi_init_sheets_admin_ui();
+            }
+        } catch (Exception $e) {
+            error_log('Failed to initialize SheetsAdminUI: ' . $e->getMessage());
         }
     }, 10);
+
+    // フォールバック用のエラー処理付き初期化
+    add_action('wp_loaded', function() {
+        try {
+            if (!class_exists('SheetsAdminUI')) {
+                error_log('SheetsAdminUI class not available during wp_loaded hook');
+                return;
+            }
+            
+            // 確実に初期化させるためのセカンダリートリガー
+            SheetsAdminUI::getInstance();
+            
+        } catch (Exception $e) {
+            error_log('SheetsAdminUI wp_loaded fallback failed: ' . $e->getMessage());
+        }
+    }, 20);
 }
