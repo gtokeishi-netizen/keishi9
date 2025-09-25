@@ -723,32 +723,39 @@ class GoogleSheetsSync {
      * 手動同期のAJAXハンドラー
      */
     public function ajax_manual_sync() {
-        // デバッグ: AJAXリクエストが到達したことをログに記録
-        gi_log_error('AJAX manual sync request received', array(
-            'user_id' => get_current_user_id(),
-            'post_data' => $_POST,
-            'request_method' => $_SERVER['REQUEST_METHOD']
-        ));
-        
+        // 全体をtry-catchでラップして500エラーを防ぐ
         try {
-            check_ajax_referer('gi_sheets_nonce', 'nonce');
-            gi_log_error('Nonce verification passed');
-        } catch (Exception $e) {
-            gi_log_error('Nonce verification failed', array('error' => $e->getMessage()));
-            wp_send_json_error('Nonce verification failed');
-        }
-        
-        if (!current_user_can('edit_posts')) {
-            gi_log_error('Permission denied', array('user_id' => get_current_user_id()));
-            wp_send_json_error('Permission denied');
-        }
-        
-        gi_log_error('Permission check passed');
-        
-        $sync_direction = sanitize_text_field($_POST['direction'] ?? 'both');
-        gi_log_error('Sync direction determined', array('direction' => $sync_direction));
-        
-        try {
+            // デバッグ: AJAXリクエストが到達したことをログに記録
+            gi_log_error('AJAX manual sync request received', array(
+                'user_id' => get_current_user_id(),
+                'post_data' => $_POST,
+                'request_method' => isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'UNKNOWN'
+            ));
+            
+            // Nonce検証
+            try {
+                check_ajax_referer('gi_sheets_nonce', 'nonce');
+                gi_log_error('Nonce verification passed');
+            } catch (Exception $e) {
+                gi_log_error('Nonce verification failed', array('error' => $e->getMessage()));
+                wp_send_json_error('Nonce verification failed: ' . $e->getMessage());
+                return;
+            }
+            
+            // 権限チェック
+            if (!current_user_can('edit_posts')) {
+                gi_log_error('Permission denied', array('user_id' => get_current_user_id()));
+                wp_send_json_error('Permission denied');
+                return;
+            }
+            
+            gi_log_error('Permission check passed');
+            
+            // 同期方向を取得
+            $sync_direction = isset($_POST['direction']) ? sanitize_text_field($_POST['direction']) : 'both';
+            gi_log_error('Sync direction determined', array('direction' => $sync_direction));
+            
+            // 同期処理を実行
             gi_log_error('Manual sync started', array('direction' => $sync_direction));
             
             switch ($sync_direction) {
@@ -776,17 +783,32 @@ class GoogleSheetsSync {
             wp_send_json_success($message);
             
         } catch (Exception $e) {
-            gi_log_error('Manual sync failed', array(
+            gi_log_error('Manual sync exception caught', array(
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ));
             wp_send_json_error('同期に失敗しました: ' . $e->getMessage());
+            
         } catch (Error $e) {
-            gi_log_error('Manual sync fatal error', array(
+            gi_log_error('Manual sync fatal error caught', array(
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ));
             wp_send_json_error('同期中に致命的エラーが発生しました: ' . $e->getMessage());
+            
+        } catch (Throwable $e) {
+            // PHP 7+ のすべてのエラーをキャッチ
+            gi_log_error('Manual sync throwable caught', array(
+                'error' => $e->getMessage(),
+                'file' => method_exists($e, 'getFile') ? $e->getFile() : 'unknown',
+                'line' => method_exists($e, 'getLine') ? $e->getLine() : 'unknown',
+                'trace' => method_exists($e, 'getTraceAsString') ? $e->getTraceAsString() : 'no trace'
+            ));
+            wp_send_json_error('予期しないエラーが発生しました: ' . $e->getMessage());
         }
     }
     

@@ -273,8 +273,8 @@ add_action('init', function() {
     // 削除された外部連携機能関連のCronフックを無効化
     $external_cron_hooks = array(
         'giji_auto_import_hook',        // J-Grants (削除済み)
-        'gi_excel_auto_export_hook',    // Excel (削除済み)
-        'gi_sheets_sync_cron'           // Google Sheets (削除済み)
+        'gi_excel_auto_export_hook'     // Excel (削除済み)
+        // gi_sheets_sync_cron は現在アクティブなので削除しない
     );
     
     foreach ($external_cron_hooks as $hook) {

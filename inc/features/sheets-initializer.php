@@ -49,23 +49,48 @@ class SheetsInitializer {
      */
     public function initialize_sheet() {
         try {
+            gi_log_error('Starting sheet initialization process');
+            
+            // Sheets Syncインスタンスの確認
+            if (!$this->sheets_sync) {
+                gi_log_error('SheetsSync instance not available, attempting to get instance');
+                if (class_exists('GoogleSheetsSync')) {
+                    $this->sheets_sync = GoogleSheetsSync::getInstance();
+                    gi_log_error('SheetsSync instance obtained');
+                } else {
+                    throw new Exception('GoogleSheetsSync クラスが利用できません');
+                }
+            }
+            
             // 1. ヘッダー行を設定
+            gi_log_error('Step 1: Setting up headers');
             $this->setup_headers();
+            gi_log_error('Headers setup completed');
             
             // 2. バリデーションルールを設定
+            gi_log_error('Step 2: Setting up validation rules');
             $this->setup_validation_rules();
+            gi_log_error('Validation rules setup completed');
             
             // 3. 既存の投稿データをエクスポート
+            gi_log_error('Step 3: Exporting existing posts');
             $this->export_existing_posts();
+            gi_log_error('Existing posts export completed');
             
             // 4. フォーマット設定
+            gi_log_error('Step 4: Setting up formatting');
             $this->setup_formatting();
+            gi_log_error('Formatting setup completed');
             
+            gi_log_error('Sheet initialization completed successfully');
             return array('success' => true, 'message' => 'スプレッドシートの初期化が完了しました');
             
         } catch (Exception $e) {
             gi_log_error('Sheet initialization failed', array(
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
             ));
             
             return array('success' => false, 'message' => '初期化に失敗しました: ' . $e->getMessage());
@@ -344,32 +369,62 @@ class SheetsInitializer {
      */
     public function ajax_initialize_sheet() {
         try {
-            gi_log_error('AJAX initialize_sheet started');
+            gi_log_error('AJAX initialize_sheet started', array(
+                'user_id' => get_current_user_id(),
+                'post_data' => $_POST
+            ));
             
+            // Nonce検証
             check_ajax_referer('gi_sheets_nonce', 'nonce');
+            gi_log_error('Nonce verification passed for initialization');
             
+            // 権限チェック
             if (!current_user_can('edit_posts')) {
-                gi_log_error('Permission denied for user', array('user_id' => get_current_user_id()));
+                gi_log_error('Permission denied for initialization', array('user_id' => get_current_user_id()));
                 wp_send_json_error('Permission denied');
+                return;
             }
             
             gi_log_error('Starting sheet initialization');
+            
+            // 初期化処理を実行
             $result = $this->initialize_sheet();
             
             gi_log_error('Sheet initialization result', $result);
             
-            if ($result['success']) {
+            if ($result && isset($result['success']) && $result['success']) {
                 wp_send_json_success($result['message']);
             } else {
-                wp_send_json_error($result['message']);
+                $error_message = isset($result['message']) ? $result['message'] : '初期化に失敗しました';
+                wp_send_json_error($error_message);
             }
             
         } catch (Exception $e) {
-            gi_log_error('AJAX initialize_sheet failed', array(
+            gi_log_error('AJAX initialize_sheet exception caught', array(
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ));
             wp_send_json_error('初期化中にエラーが発生しました: ' . $e->getMessage());
+            
+        } catch (Error $e) {
+            gi_log_error('AJAX initialize_sheet fatal error caught', array(
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ));
+            wp_send_json_error('初期化中に致命的エラーが発生しました: ' . $e->getMessage());
+            
+        } catch (Throwable $e) {
+            gi_log_error('AJAX initialize_sheet throwable caught', array(
+                'error' => $e->getMessage(),
+                'file' => method_exists($e, 'getFile') ? $e->getFile() : 'unknown',
+                'line' => method_exists($e, 'getLine') ? $e->getLine() : 'unknown',
+                'trace' => method_exists($e, 'getTraceAsString') ? $e->getTraceAsString() : 'no trace'
+            ));
+            wp_send_json_error('初期化中に予期しないエラーが発生しました: ' . $e->getMessage());
         }
     }
     
