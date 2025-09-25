@@ -38,14 +38,26 @@ class SheetsAdminUI {
      * 管理画面メニューに追加
      */
     public function add_admin_menu() {
-        add_submenu_page(
-            'edit.php?post_type=grant',
-            'Google Sheets連携',
-            'Sheets連携',
-            'manage_options',
-            'grant-sheets-sync',
-            array($this, 'admin_page')
-        );
+        // 助成金投稿タイプが存在するかチェック
+        if (post_type_exists('grant')) {
+            add_submenu_page(
+                'edit.php?post_type=grant',
+                'Google Sheets連携',
+                'Sheets連携',
+                'manage_options',
+                'grant-sheets-sync',
+                array($this, 'admin_page')
+            );
+        } else {
+            // フォールバック: 設定メニューの下に追加
+            add_options_page(
+                'Google Sheets連携',
+                'Sheets連携',
+                'manage_options',
+                'grant-sheets-sync',
+                array($this, 'admin_page')
+            );
+        }
     }
     
     /**
@@ -203,10 +215,16 @@ class SheetsAdminUI {
                     <p>Google Apps Scriptを設定することで、スプレッドシートの変更をリアルタイムでWordPressに反映できます。</p>
                     
                     <?php
-                    $webhook_handler = SheetsWebhookHandler::getInstance();
-                    $webhook_url = $webhook_handler->get_webhook_url();
-                    $rest_webhook_url = $webhook_handler->get_rest_webhook_url();
-                    $secret = $webhook_handler->get_webhook_secret();
+                    if (class_exists('SheetsWebhookHandler')) {
+                        $webhook_handler = SheetsWebhookHandler::getInstance();
+                        $webhook_url = $webhook_handler->get_webhook_url();
+                        $rest_webhook_url = $webhook_handler->get_rest_webhook_url();
+                        $secret = $webhook_handler->get_webhook_secret();
+                    } else {
+                        $webhook_url = home_url('/?gi_sheets_webhook=true');
+                        $rest_webhook_url = rest_url('gi/v1/sheets-webhook');
+                        $secret = 'webhook_handler_not_loaded';
+                    }
                     ?>
                     
                     <div class="gi-webhook-config">
@@ -470,8 +488,17 @@ add_action('wp_ajax_gi_clear_sheets_log', function() {
 
 // インスタンスを初期化
 function gi_init_sheets_admin_ui() {
-    if (is_admin()) {
-        return SheetsAdminUI::getInstance();
-    }
+    return SheetsAdminUI::getInstance();
 }
-add_action('admin_init', 'gi_init_sheets_admin_ui');
+
+// デバッグ用: 管理画面メニューの追加をログ
+add_action('admin_notices', function() {
+    if (current_user_can('manage_options') && isset($_GET['page']) && $_GET['page'] === 'grant-sheets-sync') {
+        // メニューが正常に表示されていることを確認
+    }
+});
+
+// 管理画面でのみ初期化
+if (is_admin()) {
+    add_action('plugins_loaded', 'gi_init_sheets_admin_ui', 5);
+}
