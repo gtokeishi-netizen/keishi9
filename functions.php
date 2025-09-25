@@ -27,19 +27,21 @@ if (!defined('GI_THEME_PREFIX')) {
 // 機能ファイルの読み込み
 $inc_dir = get_template_directory() . '/inc/';
 
-// 整理されたファイル構成（10ファイル → 11ファイル、Google Sheets Integration追加）
+// 論理的なディレクトリ構造でファイルを整理
 $required_files = array(
-    'theme-foundation.php',     // テーマ設定、投稿タイプ、タクソノミー統合（旧：core-setup.php）
-    'card-rendering.php',       // カードレンダリング、テンプレート、モバイル最適化統合（旧：display-functions.php）
-    'data-processing.php',      // ヘルパー関数、パフォーマンス最適化統合（旧：data-functions.php）
-    'search-integration.php',   // AI機能・検索履歴統合（旧：ai-functions.php）
-    'enhanced-ai-generator.php', // 高度なAI生成機能（新規追加）
-    'ajax-handlers.php',        // AJAX処理（旧：3-ajax-functions.php）
-    'admin-customization.php',  // 管理画面機能（旧：6-admin-functions.php）
-    'fields-configuration.php', // ACF設定とフィールド定義統合（旧：acf-setup.php）
-    'external-importer.php',    // Jグランツ・インポーター機能（旧：grant-insight-jgrants-importer.php）
-    'excel-import-export.php',  // Excel インポート・エクスポート機能（新規追加）
-    'google-sheets-integration.php' // Google Sheets連携機能（新規追加）
+    // Core foundation files
+    'core/theme-foundation.php',     // テーマ設定、投稿タイプ、タクソノミー
+    'core/data-processing.php',      // データ処理・ヘルパー関数
+    
+    // Admin interface files  
+    'admin/admin-customization.php',  // 管理画面カスタマイズ
+    'admin/fields-configuration.php', // ACF設定とフィールド定義
+    
+    // Feature files
+    'features/card-rendering.php',       // カードレンダリング・表示機能
+    'features/ajax-handlers.php',        // AJAX処理
+    'features/search-integration.php',   // AI機能・検索履歴
+    'features/enhanced-ai-generator.php' // 高度なAI生成機能
 );
 
 // 各ファイルを安全に読み込み
@@ -84,53 +86,12 @@ if (!function_exists('gi_render_card')) {
  */
 function gi_final_init() {  // ✅ 修正
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('Grant Insight Theme v' . GI_THEME_VERSION . ': File cleanup completed, 11 organized files loaded successfully');
+        error_log('Grant Insight Theme v' . GI_THEME_VERSION . ': Clean structure loaded - 8 files organized in logical directories');
     }
 }
 add_action('wp_loaded', 'gi_final_init', 999);
 
-/**
- * Excel管理への安全な権限バイパス（Fatal Error修正版）
- * 
- * 問題を起こしていた複数の user_has_cap フィルターを統合し、
- * 配列の適切な処理を行うことで Fatal Error を防ぐ
- */
-add_action('admin_init', function() {
-    // Excel管理ページアクセス時のみ権限バイパスを実行
-    if (isset($_GET['page']) && $_GET['page'] === 'gi-excel-management') {
-        
-        // 単一の安全な user_has_cap フィルター（Fatal Error対策）
-        add_filter('user_has_cap', function($allcaps, $caps, $args) {
-            // 配列でない場合は空の配列に初期化（Fatal Error防止）
-            if (!is_array($allcaps)) {
-                $allcaps = array();
-            }
-            
-            // 必要最小限の権限のみ付与
-            $allcaps['read'] = true;
-            $allcaps['exist'] = true; 
-            $allcaps['edit_posts'] = true;
-            $allcaps['manage_options'] = true;
-            
-            return $allcaps;
-        }, 10, 3);
-        
-        // 権限エラーページを無効化
-        add_action('admin_head', function() {
-            remove_all_actions('admin_page_access_denied');
-        });
-        
-        // ユーザーオブジェクトに直接権限を追加（バックアップ）
-        add_action('admin_head', function() {
-            global $current_user;
-            if ($current_user && is_object($current_user) && isset($current_user->allcaps)) {
-                $current_user->allcaps['exist'] = true;
-                $current_user->allcaps['read'] = true;
-                $current_user->allcaps['manage_options'] = true;
-            }
-        });
-    }
-});
+// Excel管理機能は削除済み - 権限バイパスコードも不要
 
 
 
@@ -227,7 +188,7 @@ function gi_ajax_load_more_grants() {
     ob_start();
     
     while ($query->have_posts()): $query->the_post();
-        echo gi_render_mobile_card(get_the_ID());
+        echo gi_render_card(get_the_ID(), 'mobile');
     endwhile;
     
     wp_reset_postdata();
@@ -292,6 +253,23 @@ if (!function_exists('gi_log_error')) {
         }
     }
 }
+
+/**
+ * 外部連携機能関連Cronタスクの無効化（削除後の安全確保）
+ */
+add_action('init', function() {
+    // 外部連携機能関連のCronフックを無効化
+    $external_cron_hooks = array(
+        'giji_auto_import_hook',        // Jグランツ
+        'gi_excel_auto_export_hook',    // Excel
+        'gi_sheets_sync_cron'           // Google Sheets
+    );
+    
+    foreach ($external_cron_hooks as $hook) {
+        // スケジュールされたイベントを全てクリア
+        wp_clear_scheduled_hook($hook);
+    }
+});
 
 /**
  * テーマ設定のデフォルト値を取得
