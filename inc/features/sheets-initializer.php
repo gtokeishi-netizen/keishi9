@@ -343,26 +343,6 @@ class SheetsInitializer {
     }
     
     /**
-     * スプレッドシートをクリア
-     */
-    public function clear_sheet() {
-        try {
-            // データ範囲を取得してクリア
-            $range = $this->sheets_sync->sheet_name . '!A:Y';
-            $result = $this->sheets_sync->write_sheet_data($range, array(array()));
-            
-            if ($result) {
-                return array('success' => true, 'message' => 'スプレッドシートをクリアしました');
-            } else {
-                throw new Exception('スプレッドシートのクリアに失敗しました');
-            }
-            
-        } catch (Exception $e) {
-            return array('success' => false, 'message' => $e->getMessage());
-        }
-    }
-    
-    /**
      * 統計情報の取得
      */
     public function get_sync_stats() {
