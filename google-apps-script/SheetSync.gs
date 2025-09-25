@@ -26,6 +26,9 @@ const CONFIG = {
   // 対象のシート名
   SHEET_NAME: 'grant_import',
   
+  // WordPress サイトのベースURL（REST APIのベース）
+  WORDPRESS_BASE_URL: 'https://joseikin-insight.com',
+  
   // デバッグモード（trueにすると詳細ログを出力）
   DEBUG_MODE: true
 };
@@ -158,6 +161,97 @@ function manualFullSync() {
   }
 }
 
+/**
+ * WordPressから投稿データをインポート
+ * WordPress側から呼び出される初期化関数
+ */
+function importGrantPosts() {
+  try {
+    console.log('Starting grant posts import...');
+    
+    // スプレッドシートを取得または作成
+    const sheet = getOrCreateSheet();
+    
+    // ヘッダー行を設定
+    setupHeaders(sheet);
+    
+    // WordPressからデータを要求
+    const postsData = requestGrantPostsFromWordPress();
+    
+    if (!postsData || postsData.length === 0) {
+      console.log('No posts data received from WordPress');
+      return {
+        success: true,
+        message: 'Import completed - no posts found',
+        imported: 0
+      };
+    }
+    
+    // 既存データをクリア（ヘッダー以外）
+    clearExistingData(sheet);
+    
+    // データを書き込み
+    let importedCount = 0;
+    
+    postsData.forEach((postData, index) => {
+      try {
+        const rowNumber = index + 2; // ヘッダー行の下から開始
+        const range = sheet.getRange(rowNumber, 1, 1, postData.length);
+        range.setValues([postData]);
+        importedCount++;
+      } catch (rowError) {
+        console.error(`Failed to import row ${index + 2}:`, rowError);
+      }
+    });
+    
+    console.log(`Import completed: ${importedCount} posts imported`);
+    
+    return {
+      success: true,
+      message: `Import completed successfully. ${importedCount} posts imported.`,
+      imported: importedCount
+    };
+    
+  } catch (error) {
+    console.error('Import grant posts failed:', error);
+    logError('Import grant posts failed', error);
+    
+    return {
+      success: false,
+      message: `Import failed: ${error.message}`,
+      imported: 0
+    };
+  }
+}
+
+/**
+ * スプレッドシートを初期化（ヘッダーのみ）
+ */
+function initializeSheet() {
+  try {
+    console.log('Initializing sheet...');
+    
+    const sheet = getOrCreateSheet();
+    setupHeaders(sheet);
+    
+    console.log('Sheet initialization completed');
+    
+    return {
+      success: true,
+      message: 'Sheet initialized successfully'
+    };
+    
+  } catch (error) {
+    console.error('Sheet initialization failed:', error);
+    logError('Sheet initialization failed', error);
+    
+    return {
+      success: false,
+      message: `Initialization failed: ${error.message}`
+    };
+  }
+}
+
 // =============================================================================
 // ヘルパー関数
 // =============================================================================
@@ -180,6 +274,151 @@ function getRowData(sheet, rowNumber) {
   } catch (error) {
     console.error('getRowData error:', error);
     return null;
+  }
+}
+
+/**
+ * シートを取得または作成
+ */
+function getOrCreateSheet() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+  
+  if (!sheet) {
+    console.log(`Creating new sheet: ${CONFIG.SHEET_NAME}`);
+    sheet = spreadsheet.insertSheet(CONFIG.SHEET_NAME);
+  }
+  
+  return sheet;
+}
+
+/**
+ * ヘッダー行を設定
+ */
+function setupHeaders(sheet) {
+  const headers = [
+    'ID',                    // A列
+    'タイトル',               // B列
+    '内容',                  // C列
+    '抜粋',                  // D列
+    'ステータス',             // E列
+    '作成日',                // F列
+    '更新日',                // G列
+    '助成金額（表示用）',      // H列
+    '助成金額（数値）',        // I列
+    '申請期限（表示用）',      // J列
+    '申請期限（日付）',        // K列
+    '実施組織',              // L列
+    '組織タイプ',            // M列
+    '対象者・対象事業',       // N列
+    '申請方法',              // O列
+    '問い合わせ先',          // P列
+    '公式URL',               // Q列
+    '都道府県コード',        // R列
+    '都道府県名',            // S列
+    '対象市町村',            // T列
+    '地域制限',              // U列
+    '申請ステータス',        // V列
+    'カテゴリ',              // W列
+    'タグ',                  // X列
+    'シート更新日'           // Y列
+  ];
+  
+  // ヘッダー行を設定
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  headerRange.setValues([headers]);
+  
+  // ヘッダー行をフォーマット
+  headerRange.setFontWeight('bold');
+  headerRange.setBackground('#f0f0f0');
+  
+  // 列幅を自動調整
+  sheet.autoResizeColumns(1, headers.length);
+  
+  console.log('Headers setup completed');
+}
+
+/**
+ * 既存データをクリア（ヘッダー以外）
+ */
+function clearExistingData(sheet) {
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow > 1) {
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
+    dataRange.clearContent();
+    console.log(`Cleared existing data: rows 2-${lastRow}`);
+  }
+}
+
+/**
+ * WordPressから投稿データを要求
+ */
+function requestGrantPostsFromWordPress() {
+  try {
+    console.log('Requesting grant posts data from WordPress...');
+    
+    // WordPress のエクスポート API エンドポイントを構築
+    const baseUrl = CONFIG.REST_API_URL.replace('/sheets-webhook', '');
+    const exportUrl = `${baseUrl}/export-grants`;
+    
+    const options = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    };
+    
+    const response = UrlFetchApp.fetch(exportUrl, options);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    
+    console.log('WordPress export response:', {
+      code: responseCode,
+      body: responseText.substring(0, 200) + '...'
+    });
+    
+    if (responseCode >= 200 && responseCode < 300) {
+      const data = JSON.parse(responseText);
+      return data.success ? data.data : null;
+    } else {
+      console.error(`WordPress export failed: HTTP ${responseCode}`);
+      return null;
+    }
+    
+  } catch (error) {
+    console.error('Failed to request posts from WordPress:', error);
+    
+    // フォールバック: 手動でのデータ入力を促すメッセージ行を作成
+    return [
+      [
+        '',  // ID (空欄)
+        'サンプル助成金',  // タイトル
+        'こちらはサンプルデータです。実際のデータを入力してください。',  // 内容
+        'サンプルの抜粋です',  // 抜粋
+        'draft',  // ステータス
+        new Date().toISOString().substring(0, 19).replace('T', ' '),  // 作成日
+        new Date().toISOString().substring(0, 19).replace('T', ' '),  // 更新日
+        '最大100万円',  // 助成金額（表示用）
+        1000000,  // 助成金額（数値）
+        '2024年12月31日',  // 申請期限（表示用）
+        '2024-12-31',  // 申請期限（日付）
+        '◯◯財団',  // 実施組織
+        'foundation',  // 組織タイプ
+        '中小企業向け',  // 対象者・対象事業
+        'online',  // 申請方法
+        'contact@example.com',  // 問い合わせ先
+        'https://example.com',  // 公式URL
+        'tokyo',  // 都道府県コード
+        '東京都',  // 都道府県名
+        '全域',  // 対象市町村
+        'prefecture',  // 地域制限
+        'open',  // 申請ステータス
+        'ビジネス支援',  // カテゴリ
+        'スタートアップ, 中小企業',  // タグ
+        new Date().toISOString().substring(0, 19).replace('T', ' ')  // シート更新日
+      ]
+    ];
   }
 }
 
@@ -453,6 +692,14 @@ function testConnection() {
    - SHEET_NAME を確認
 4. setupTriggers() 関数を一度実行してトリガーを設定
 5. testConnection() 関数で接続をテスト
+6. importGrantPosts() 関数でWordPressからデータをインポート
+
+利用可能な関数：
+- setupTriggers() : 初期セットアップとトリガー設定
+- testConnection() : WordPress接続テスト
+- importGrantPosts() : WordPressから投稿データをインポート
+- initializeSheet() : スプレッドシートの初期化（ヘッダーのみ）
+- manualFullSync() : 手動での全データ同期
 
 注意事項：
 - Google Apps Scriptの実行権限が必要です
@@ -463,4 +710,5 @@ function testConnection() {
 - スプレッドシートを編集すると自動的にWordPressに同期されます
 - manualFullSync() 関数で手動で全データを同期できます
 - Error_Log シートでエラーを確認できます
+- importGrantPosts() でWordPressからの初回データインポートが可能です
 */

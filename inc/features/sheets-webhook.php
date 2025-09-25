@@ -112,6 +112,13 @@ class SheetsWebhookHandler {
             'callback' => array($this, 'rest_webhook_handler'),
             'permission_callback' => '__return_true', // セキュリティは独自に検証
         ));
+        
+        // Google Apps Script用のエクスポートエンドポイント
+        register_rest_route('gi/v1', '/export-grants', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'export_grants_handler'),
+            'permission_callback' => '__return_true',
+        ));
     }
     
     /**
@@ -498,6 +505,94 @@ class SheetsWebhookHandler {
             </p>
         </div>
         <?php
+    }
+    
+    /**
+     * 助成金データエクスポートハンドラー（Google Apps Script用）
+     */
+    public function export_grants_handler($request) {
+        try {
+            // 助成金投稿を取得
+            $posts = get_posts(array(
+                'post_type' => 'grant',
+                'post_status' => array('publish', 'draft', 'private'),
+                'numberposts' => -1,
+                'orderby' => 'date',
+                'order' => 'DESC'
+            ));
+            
+            $exported_data = array();
+            
+            foreach ($posts as $post) {
+                $post_id = $post->ID;
+                
+                // 投稿データをスプレッドシート形式に変換
+                $row_data = $this->convert_post_to_export_row($post_id);
+                if ($row_data) {
+                    $exported_data[] = $row_data;
+                }
+            }
+            
+            return rest_ensure_response(array(
+                'success' => true,
+                'message' => 'Posts exported successfully',
+                'count' => count($exported_data),
+                'data' => $exported_data
+            ));
+            
+        } catch (Exception $e) {
+            return new WP_Error('export_failed', $e->getMessage(), array('status' => 500));
+        }
+    }
+    
+    /**
+     * 投稿データをエクスポート用の行データに変換
+     */
+    private function convert_post_to_export_row($post_id) {
+        $post = get_post($post_id);
+        if (!$post || $post->post_type !== 'grant') {
+            return false;
+        }
+        
+        // 都道府県名を取得
+        $prefecture_code = get_field('target_prefecture', $post_id);
+        $prefecture_name = '';
+        if ($prefecture_code && function_exists('gi_get_prefecture_name_by_code')) {
+            $prefecture_name = gi_get_prefecture_name_by_code($prefecture_code);
+        }
+        
+        // カテゴリとタグを取得
+        $categories = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
+        $tags = wp_get_post_terms($post_id, 'grant_tag', array('fields' => 'names'));
+        
+        // スプレッドシートの列順に合わせたデータ配列
+        return array(
+            $post_id,                                                    // A: ID
+            $post->post_title,                                           // B: タイトル
+            wp_strip_all_tags($post->post_content),                     // C: 内容
+            $post->post_excerpt,                                         // D: 抜粋
+            $post->post_status,                                          // E: ステータス
+            $post->post_date,                                            // F: 作成日
+            $post->post_modified,                                        // G: 更新日
+            get_field('max_amount', $post_id) ?: '',                     // H: 助成金額（表示用）
+            get_field('max_amount_numeric', $post_id) ?: 0,              // I: 助成金額（数値）
+            get_field('deadline', $post_id) ?: '',                       // J: 申請期限（表示用）
+            get_field('deadline_date', $post_id) ?: '',                  // K: 申請期限（日付）
+            get_field('organization', $post_id) ?: '',                   // L: 実施組織
+            get_field('organization_type', $post_id) ?: 'national',      // M: 組織タイプ
+            get_field('grant_target', $post_id) ?: '',                   // N: 対象者・対象事業
+            get_field('application_method', $post_id) ?: 'online',       // O: 申請方法
+            get_field('contact_info', $post_id) ?: '',                   // P: 問い合わせ先
+            get_field('official_url', $post_id) ?: '',                   // Q: 公式URL
+            get_field('target_prefecture', $post_id) ?: '',              // R: 都道府県コード
+            $prefecture_name,                                            // S: 都道府県名
+            get_field('target_municipality', $post_id) ?: '',            // T: 対象市町村
+            get_field('regional_limitation', $post_id) ?: 'nationwide',   // U: 地域制限
+            get_field('application_status', $post_id) ?: 'open',         // V: 申請ステータス
+            is_array($categories) ? implode(', ', $categories) : '',     // W: カテゴリ
+            is_array($tags) ? implode(', ', $tags) : '',                 // X: タグ
+            current_time('mysql')                                        // Y: シート更新日
+        );
     }
     
     /**
