@@ -628,7 +628,7 @@ class GoogleSheetsSync {
     public function ajax_manual_sync() {
         check_ajax_referer('gi_sheets_nonce', 'nonce');
         
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('edit_posts')) {
             wp_send_json_error('Permission denied');
         }
         
@@ -669,7 +669,7 @@ class GoogleSheetsSync {
     public function ajax_test_connection() {
         check_ajax_referer('gi_sheets_nonce', 'nonce');
         
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('edit_posts')) {
             wp_send_json_error('Permission denied');
         }
         

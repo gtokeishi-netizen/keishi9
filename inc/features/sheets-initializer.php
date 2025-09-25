@@ -345,7 +345,7 @@ class SheetsInitializer {
     public function ajax_initialize_sheet() {
         check_ajax_referer('gi_sheets_nonce', 'nonce');
         
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('edit_posts')) {
             wp_send_json_error('Permission denied');
         }
         
@@ -421,7 +421,7 @@ class SheetsInitializer {
     public function ajax_export_all_posts() {
         check_ajax_referer('gi_sheets_nonce', 'nonce');
         
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('edit_posts')) {
             wp_send_json_error('Permission denied');
         }
         
@@ -439,7 +439,7 @@ class SheetsInitializer {
 add_action('wp_ajax_gi_clear_sheet', function() {
     check_ajax_referer('gi_sheets_nonce', 'nonce');
     
-    if (!current_user_can('manage_options')) {
+    if (!current_user_can('edit_posts')) {
         wp_send_json_error('Permission denied');
     }
     

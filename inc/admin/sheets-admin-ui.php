@@ -478,7 +478,7 @@ class SheetsAdminUI {
 add_action('wp_ajax_gi_clear_sheets_log', function() {
     check_ajax_referer('gi_sheets_nonce', 'nonce');
     
-    if (!current_user_can('manage_options')) {
+    if (!current_user_can('edit_posts')) {
         wp_send_json_error('Permission denied');
     }
     
@@ -504,7 +504,11 @@ add_action('admin_notices', function() {
     }
 });
 
-// 管理画面でのみ初期化
+// 管理画面でのみ初期化 - より早いタイミングで実行
 if (is_admin()) {
-    add_action('plugins_loaded', 'gi_init_sheets_admin_ui', 5);
+    // 即座に初期化を実行
+    gi_init_sheets_admin_ui();
+    
+    // フックでも念のため登録
+    add_action('init', 'gi_init_sheets_admin_ui', 1);
 }
