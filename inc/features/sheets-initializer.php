@@ -179,9 +179,37 @@ class SheetsInitializer {
             '' // シート更新日（空欄）
         );
         
-        // サンプル行を3行目に追加
+        // サンプル行を3行目に追加（25列に対応）
+        $validation_samples = array(
+            '', // ID（空欄）
+            'サンプル助成金タイトル', // タイトル
+            'この助成金の詳細な説明をここに記載します。', // 内容
+            '短い概要説明', // 抜粋
+            'draft', // ステータス例
+            '', // 作成日（空欄）
+            '', // 更新日（空欄）
+            '最大100万円', // 助成金額（表示用）
+            '1000000', // 助成金額（数値）
+            '2024年12月31日', // 申請期限（表示用）
+            '2024-12-31', // 申請期限（日付）
+            '◯◯財団', // 実施組織
+            'foundation', // 組織タイプ
+            '中小企業向け地域振興事業', // 対象者・対象事業
+            'online', // 申請方法
+            'info@example.org', // 問い合わせ先
+            'https://example.org', // 公式URL
+            'tokyo', // 都道府県コード
+            '東京都', // 都道府県名
+            '全域', // 対象市町村
+            'prefecture', // 地域制限
+            'open', // 申請ステータス
+            '地域振興, 社会貢献', // カテゴリ
+            'NPO, 助成金', // タグ
+            '' // シート更新日（空欄）
+        );
+        
         $this->sheets_sync->write_sheet_data(
-            $this->sheets_sync->sheet_name . '!A3:R3', 
+            $this->sheets_sync->sheet_name . '!A3:Y3', 
             array($validation_samples)
         );
         
@@ -501,6 +529,45 @@ class SheetsInitializer {
             
         } catch (Exception $e) {
             wp_send_json_error('エクスポートに失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * スプレッドシートをクリア
+     */
+    public function clear_sheet() {
+        try {
+            gi_log_error('Starting sheet clear process');
+            
+            // Sheets Syncインスタンスの確認
+            if (!$this->sheets_sync) {
+                if (class_exists('GoogleSheetsSync')) {
+                    $this->sheets_sync = GoogleSheetsSync::getInstance();
+                } else {
+                    throw new Exception('GoogleSheetsSync クラスが利用できません');
+                }
+            }
+            
+            // スプレッドシートのデータをクリア（ヘッダー行は残す）
+            $range = 'A2:Y1000'; // 25列、1000行までクリア
+            $clear_data = $this->sheets_sync->clear_sheet_range($range);
+            
+            if ($clear_data) {
+                gi_log_error('Sheet clear completed successfully');
+                return array(
+                    'success' => true,
+                    'message' => 'スプレッドシートのデータをクリアしました'
+                );
+            } else {
+                throw new Exception('スプレッドシートのクリアに失敗しました');
+            }
+            
+        } catch (Exception $e) {
+            gi_log_error('Sheet clear failed', array('error' => $e->getMessage()));
+            return array(
+                'success' => false,
+                'message' => 'クリアに失敗しました: ' . $e->getMessage()
+            );
         }
     }
 }

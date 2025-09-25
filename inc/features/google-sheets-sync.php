@@ -105,13 +105,29 @@ class GoogleSheetsSync {
      * Google Sheets APIアクセストークンを取得
      */
     private function get_access_token() {
+        gi_log_error('Getting access token', array(
+            'has_existing_token' => !empty($this->access_token),
+            'token_expires_at' => $this->token_expires_at,
+            'current_time' => time(),
+            'token_still_valid' => ($this->token_expires_at && time() < ($this->token_expires_at - 300))
+        ));
+        
         // 既存のトークンが有効な場合はそれを使用
         if ($this->access_token && $this->token_expires_at && time() < ($this->token_expires_at - 300)) {
+            gi_log_error('Using existing valid token');
             return $this->access_token;
         }
         
+        gi_log_error('Generating new access token');
+        
         // JWTを作成
         $jwt = $this->create_jwt();
+        if (!$jwt) {
+            gi_log_error('JWT creation failed');
+            return false;
+        }
+        
+        gi_log_error('JWT created successfully', array('jwt_length' => strlen($jwt)));
         
         // トークンリクエスト
         $response = wp_remote_post('https://oauth2.googleapis.com/token', array(
@@ -132,12 +148,21 @@ class GoogleSheetsSync {
             return false;
         }
         
+        $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+        
+        gi_log_error('Token request response', array(
+            'response_code' => $response_code,
+            'body' => $body
+        ));
+        
         $token_data = json_decode($body, true);
         
         if (!isset($token_data['access_token'])) {
             gi_log_error('Invalid Token Response', array(
-                'response' => $body
+                'response_code' => $response_code,
+                'response' => $body,
+                'parsed_data' => $token_data
             ));
             return false;
         }
@@ -149,6 +174,11 @@ class GoogleSheetsSync {
         update_option('gi_sheets_access_token', $this->access_token);
         update_option('gi_sheets_token_expires', $this->token_expires_at);
         
+        gi_log_error('New access token obtained and saved', array(
+            'expires_at' => $this->token_expires_at,
+            'expires_in' => $token_data['expires_in']
+        ));
+        
         return $this->access_token;
     }
     
@@ -156,32 +186,79 @@ class GoogleSheetsSync {
      * JWT（JSON Web Token）を作成
      */
     private function create_jwt() {
-        $header = json_encode(array(
-            'alg' => 'RS256',
-            'typ' => 'JWT'
-        ));
-        
-        $now = time();
-        $payload = json_encode(array(
-            'iss' => $this->service_account_key['client_email'],
-            'scope' => self::AUTH_SCOPE,
-            'aud' => 'https://oauth2.googleapis.com/token',
-            'exp' => $now + 3600,
-            'iat' => $now
-        ));
-        
-        $base64_header = $this->base64url_encode($header);
-        $base64_payload = $this->base64url_encode($payload);
-        
-        $signature_input = $base64_header . '.' . $base64_payload;
-        
-        // 秘密鍵で署名
-        $private_key = $this->service_account_key['private_key'];
-        openssl_sign($signature_input, $signature, $private_key, OPENSSL_ALGO_SHA256);
-        
-        $base64_signature = $this->base64url_encode($signature);
-        
-        return $signature_input . '.' . $base64_signature;
+        try {
+            gi_log_error('Creating JWT', array(
+                'client_email' => $this->service_account_key['client_email'],
+                'has_private_key' => !empty($this->service_account_key['private_key'])
+            ));
+            
+            $header = json_encode(array(
+                'alg' => 'RS256',
+                'typ' => 'JWT'
+            ));
+            
+            $now = time();
+            $payload = json_encode(array(
+                'iss' => $this->service_account_key['client_email'],
+                'scope' => self::AUTH_SCOPE,
+                'aud' => 'https://oauth2.googleapis.com/token',
+                'exp' => $now + 3600,
+                'iat' => $now
+            ));
+            
+            gi_log_error('JWT payload created', array(
+                'iss' => $this->service_account_key['client_email'],
+                'scope' => self::AUTH_SCOPE,
+                'now' => $now,
+                'exp' => $now + 3600
+            ));
+            
+            $base64_header = $this->base64url_encode($header);
+            $base64_payload = $this->base64url_encode($payload);
+            
+            $signature_input = $base64_header . '.' . $base64_payload;
+            
+            // 秘密鍵で署名
+            $private_key = $this->service_account_key['private_key'];
+            
+            if (empty($private_key)) {
+                gi_log_error('Private key is empty');
+                return false;
+            }
+            
+            // OpenSSL署名の実行
+            $sign_result = openssl_sign($signature_input, $signature, $private_key, OPENSSL_ALGO_SHA256);
+            
+            if (!$sign_result) {
+                gi_log_error('OpenSSL signing failed', array(
+                    'openssl_error' => openssl_error_string(),
+                    'private_key_length' => strlen($private_key)
+                ));
+                return false;
+            }
+            
+            gi_log_error('JWT signing successful', array(
+                'signature_length' => strlen($signature)
+            ));
+            
+            $base64_signature = $this->base64url_encode($signature);
+            
+            $final_jwt = $signature_input . '.' . $base64_signature;
+            
+            gi_log_error('JWT created successfully', array(
+                'jwt_length' => strlen($final_jwt)
+            ));
+            
+            return $final_jwt;
+            
+        } catch (Exception $e) {
+            gi_log_error('JWT creation failed', array(
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ));
+            return false;
+        }
     }
     
     /**
@@ -233,8 +310,16 @@ class GoogleSheetsSync {
     public function write_sheet_data($range, $values, $input_option = 'RAW') {
         $access_token = $this->get_access_token();
         if (!$access_token) {
+            gi_log_error('Write Sheet Data: No access token available');
             return false;
         }
+        
+        gi_log_error('Writing to sheets', array(
+            'range' => $range,
+            'values_count' => count($values),
+            'spreadsheet_id' => $this->spreadsheet_id,
+            'sheet_name' => $this->sheet_name
+        ));
         
         $url = self::SHEETS_API_URL . $this->spreadsheet_id . '/values/' . urlencode($range) . '?valueInputOption=' . $input_option;
         
@@ -243,6 +328,11 @@ class GoogleSheetsSync {
             'majorDimension' => 'ROWS',
             'values' => $values
         );
+        
+        gi_log_error('Sheets API request details', array(
+            'url' => $url,
+            'request_body' => $request_body
+        ));
         
         $response = wp_remote_request($url, array(
             'method' => 'PUT',
@@ -255,15 +345,34 @@ class GoogleSheetsSync {
         ));
         
         if (is_wp_error($response)) {
-            gi_log_error('Sheets Write Failed', array(
+            gi_log_error('Sheets Write Request Failed', array(
                 'error' => $response->get_error_message(),
-                'range' => $range
+                'range' => $range,
+                'url' => $url
             ));
             return false;
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
-        return $response_code >= 200 && $response_code < 300;
+        $response_body = wp_remote_retrieve_body($response);
+        
+        gi_log_error('Sheets write response', array(
+            'response_code' => $response_code,
+            'response_body' => $response_body,
+            'range' => $range
+        ));
+        
+        if ($response_code < 200 || $response_code >= 300) {
+            gi_log_error('Sheets Write Failed - Bad Response Code', array(
+                'response_code' => $response_code,
+                'response_body' => $response_body,
+                'range' => $range
+            ));
+            return false;
+        }
+        
+        gi_log_error('Sheets write successful', array('range' => $range));
+        return true;
     }
     
     /**
@@ -848,6 +957,49 @@ class GoogleSheetsSync {
         } catch (Exception $e) {
             wp_send_json_error('接続テストに失敗しました: ' . $e->getMessage());
         }
+    }
+    
+    /**
+     * スプレッドシートの範囲をクリア
+     */
+    public function clear_sheet_range($range) {
+        $access_token = $this->get_access_token();
+        if (!$access_token) {
+            gi_log_error('Failed to get access token for clear operation');
+            return false;
+        }
+        
+        $url = self::SHEETS_API_URL . $this->spreadsheet_id . '/values/' . urlencode($this->sheet_name . '!' . $range) . ':clear';
+        
+        $response = wp_remote_post($url, array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json'
+            ),
+            'body' => '{}',
+            'timeout' => 30
+        ));
+        
+        if (is_wp_error($response)) {
+            gi_log_error('Clear Sheet Range Request Failed', array(
+                'error' => $response->get_error_message(),
+                'range' => $range
+            ));
+            return false;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200) {
+            gi_log_error('Clear Sheet Range Failed', array(
+                'response_code' => $response_code,
+                'response_body' => wp_remote_retrieve_body($response),
+                'range' => $range
+            ));
+            return false;
+        }
+        
+        gi_log_error('Sheet range cleared successfully', array('range' => $range));
+        return true;
     }
     
     /**
