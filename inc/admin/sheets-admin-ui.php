@@ -29,9 +29,13 @@ class SheetsAdminUI {
     }
     
     private function __construct() {
-        add_action('admin_menu', array($this, 'add_admin_menu'));
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-        add_action('admin_init', array($this, 'register_settings'));
+        try {
+            add_action('admin_menu', array($this, 'add_admin_menu'));
+            add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+            add_action('admin_init', array($this, 'register_settings'));
+        } catch (Exception $e) {
+            error_log('SheetsAdminUI constructor error: ' . $e->getMessage());
+        }
     }
     
     /**
@@ -130,6 +134,8 @@ class SheetsAdminUI {
      * 管理画面のメインページ
      */
     public function admin_page() {
+        // エラーハンドリングでページ全体を保護
+        try {
         ?>
         <div class="wrap">
             <h1>Google Sheets連携設定</h1>
@@ -215,15 +221,28 @@ class SheetsAdminUI {
                     <p>Google Apps Scriptを設定することで、スプレッドシートの変更をリアルタイムでWordPressに反映できます。</p>
                     
                     <?php
-                    if (class_exists('SheetsWebhookHandler')) {
-                        $webhook_handler = SheetsWebhookHandler::getInstance();
-                        $webhook_url = $webhook_handler->get_webhook_url();
-                        $rest_webhook_url = $webhook_handler->get_rest_webhook_url();
-                        $secret = $webhook_handler->get_webhook_secret();
-                    } else {
+                    // Webhookハンドラーが利用可能かチェック
+                    try {
+                        if (class_exists('SheetsWebhookHandler')) {
+                            $webhook_handler = SheetsWebhookHandler::getInstance();
+                            if (method_exists($webhook_handler, 'get_webhook_url')) {
+                                $webhook_url = $webhook_handler->get_webhook_url();
+                                $rest_webhook_url = $webhook_handler->get_rest_webhook_url();
+                                $secret = $webhook_handler->get_webhook_secret();
+                            } else {
+                                throw new Exception('Webhook methods not available');
+                            }
+                        } else {
+                            throw new Exception('SheetsWebhookHandler class not found');
+                        }
+                    } catch (Exception $e) {
+                        // フォールバック値を設定
                         $webhook_url = home_url('/?gi_sheets_webhook=true');
                         $rest_webhook_url = rest_url('gi/v1/sheets-webhook');
-                        $secret = 'webhook_handler_not_loaded';
+                        $secret = wp_generate_password(32, false);
+                        
+                        // エラーログに記録
+                        error_log('Webhook handler error: ' . $e->getMessage());
                     }
                     ?>
                     
@@ -373,6 +392,19 @@ class SheetsAdminUI {
             </div>
         </div>
         <?php
+        } catch (Exception $e) {
+            // エラーが発生した場合の表示
+            echo '<div class="wrap">';
+            echo '<h1>Google Sheets連携設定</h1>';
+            echo '<div class="notice notice-error">';
+            echo '<p><strong>エラーが発生しました:</strong> ' . esc_html($e->getMessage()) . '</p>';
+            echo '<p>管理者にお問い合わせください。</p>';
+            echo '</div>';
+            echo '</div>';
+            
+            // エラーログに記録
+            error_log('Sheets Admin UI Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+        }
     }
     
     /**
@@ -504,11 +536,12 @@ add_action('admin_notices', function() {
     }
 });
 
-// 管理画面でのみ初期化 - より早いタイミングで実行
+// 管理画面でのみ初期化 - より安全な方法
 if (is_admin()) {
-    // 即座に初期化を実行
-    gi_init_sheets_admin_ui();
-    
-    // フックでも念のため登録
-    add_action('init', 'gi_init_sheets_admin_ui', 1);
+    // WordPressが完全に初期化された後に実行
+    add_action('admin_init', function() {
+        if (function_exists('gi_init_sheets_admin_ui')) {
+            gi_init_sheets_admin_ui();
+        }
+    }, 10);
 }

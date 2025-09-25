@@ -608,18 +608,42 @@ class GoogleSheetsSync {
      * 全投稿をスプレッドシートに同期
      */
     public function sync_all_posts_to_sheets() {
+        gi_log_error('Starting sync_all_posts_to_sheets');
+        
         $posts = get_posts(array(
             'post_type' => 'grant',
             'post_status' => array('publish', 'draft', 'private'),
             'numberposts' => -1
         ));
         
-        // ヘッダーを設定
-        $this->setup_sheet_headers();
+        gi_log_error('Found posts to sync', array('count' => count($posts)));
         
-        foreach ($posts as $post) {
-            $this->sync_post_to_sheets($post->ID, $post, true);
+        // ヘッダーを設定
+        gi_log_error('Setting up sheet headers');
+        $header_result = $this->setup_sheet_headers();
+        gi_log_error('Header setup result', array('success' => $header_result));
+        
+        if (!$header_result) {
+            throw new Exception('ヘッダーの設定に失敗しました');
         }
+        
+        $synced_count = 0;
+        foreach ($posts as $post) {
+            try {
+                gi_log_error('Syncing post', array('post_id' => $post->ID, 'title' => $post->post_title));
+                $this->sync_post_to_sheets($post->ID, $post, true);
+                $synced_count++;
+            } catch (Exception $e) {
+                gi_log_error('Failed to sync individual post', array(
+                    'post_id' => $post->ID,
+                    'error' => $e->getMessage()
+                ));
+                // 個別の投稿の失敗では全体を停止させない
+                continue;
+            }
+        }
+        
+        gi_log_error('Completed sync_all_posts_to_sheets', array('synced_count' => $synced_count));
     }
     
     /**
@@ -635,31 +659,44 @@ class GoogleSheetsSync {
         $sync_direction = sanitize_text_field($_POST['direction'] ?? 'both');
         
         try {
+            gi_log_error('Manual sync started', array('direction' => $sync_direction));
+            
             switch ($sync_direction) {
                 case 'wp_to_sheets':
+                    gi_log_error('Starting WP to Sheets sync');
                     $this->sync_all_posts_to_sheets();
                     $message = 'WordPressからスプレッドシートへの同期が完了しました。';
                     break;
                 
                 case 'sheets_to_wp':
+                    gi_log_error('Starting Sheets to WP sync');
                     $synced = $this->sync_sheets_to_wp();
                     $message = "スプレッドシートからWordPressへ {$synced} 件同期しました。";
                     break;
                 
                 case 'both':
                 default:
+                    gi_log_error('Starting bidirectional sync');
                     $this->full_bidirectional_sync();
                     $message = '双方向同期が完了しました。';
                     break;
             }
             
+            gi_log_error('Manual sync completed successfully');
             wp_send_json_success($message);
             
         } catch (Exception $e) {
             gi_log_error('Manual sync failed', array(
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ));
             wp_send_json_error('同期に失敗しました: ' . $e->getMessage());
+        } catch (Error $e) {
+            gi_log_error('Manual sync fatal error', array(
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ));
+            wp_send_json_error('同期中に致命的エラーが発生しました: ' . $e->getMessage());
         }
     }
     
