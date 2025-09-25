@@ -68,21 +68,35 @@ class SheetsAdminUI {
      * 管理画面用スクリプトとスタイル
      */
     public function enqueue_admin_scripts($hook) {
+        // デバッグ：フック情報をログに記録
+        gi_log_error('Admin scripts hook', array('hook' => $hook, 'contains_grant_sheets' => strpos($hook, 'grant-sheets-sync') !== false));
+        
         if (strpos($hook, 'grant-sheets-sync') === false) {
             return;
         }
         
+        // JavaScriptファイルのパスを確認
+        $js_path = get_template_directory_uri() . '/assets/js/sheets-admin.js';
+        $js_file_path = get_template_directory() . '/assets/js/sheets-admin.js';
+        
+        gi_log_error('Enqueuing admin scripts', array(
+            'js_url' => $js_path,
+            'js_file_exists' => file_exists($js_file_path),
+            'hook' => $hook
+        ));
+        
         wp_enqueue_script(
             'gi-sheets-admin',
-            get_template_directory_uri() . '/assets/js/sheets-admin.js',
+            $js_path,
             array('jquery'),
-            GI_THEME_VERSION,
+            GI_THEME_VERSION . '-' . time(), // Cache busting
             true
         );
         
-        wp_localize_script('gi-sheets-admin', 'giSheetsAdmin', array(
+        $localize_data = array(
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('gi_sheets_nonce'),
+            'debug' => true, // デバッグモード追加
             'strings' => array(
                 'testing' => '接続をテスト中...',
                 'syncing' => '同期中...',
@@ -90,11 +104,24 @@ class SheetsAdminUI {
                 'error' => 'エラー',
                 'confirm_sync' => '同期を実行しますか？この操作により既存のデータが上書きされる可能性があります。'
             )
+        );
+        
+        gi_log_error('Localizing script data', $localize_data);
+        
+        wp_localize_script('gi-sheets-admin', 'giSheetsAdmin', $localize_data);
+        
+        // CSSファイルも確認
+        $css_path = get_template_directory_uri() . '/assets/css/sheets-admin.css';
+        $css_file_path = get_template_directory() . '/assets/css/sheets-admin.css';
+        
+        gi_log_error('CSS file check', array(
+            'css_url' => $css_path,
+            'css_file_exists' => file_exists($css_file_path)
         ));
         
         wp_enqueue_style(
             'gi-sheets-admin-style',
-            get_template_directory_uri() . '/assets/css/sheets-admin.css',
+            $css_path,
             array(),
             GI_THEME_VERSION
         );

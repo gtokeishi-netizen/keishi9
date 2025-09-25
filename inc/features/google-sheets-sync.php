@@ -723,13 +723,30 @@ class GoogleSheetsSync {
      * 手動同期のAJAXハンドラー
      */
     public function ajax_manual_sync() {
-        check_ajax_referer('gi_sheets_nonce', 'nonce');
+        // デバッグ: AJAXリクエストが到達したことをログに記録
+        gi_log_error('AJAX manual sync request received', array(
+            'user_id' => get_current_user_id(),
+            'post_data' => $_POST,
+            'request_method' => $_SERVER['REQUEST_METHOD']
+        ));
+        
+        try {
+            check_ajax_referer('gi_sheets_nonce', 'nonce');
+            gi_log_error('Nonce verification passed');
+        } catch (Exception $e) {
+            gi_log_error('Nonce verification failed', array('error' => $e->getMessage()));
+            wp_send_json_error('Nonce verification failed');
+        }
         
         if (!current_user_can('edit_posts')) {
+            gi_log_error('Permission denied', array('user_id' => get_current_user_id()));
             wp_send_json_error('Permission denied');
         }
         
+        gi_log_error('Permission check passed');
+        
         $sync_direction = sanitize_text_field($_POST['direction'] ?? 'both');
+        gi_log_error('Sync direction determined', array('direction' => $sync_direction));
         
         try {
             gi_log_error('Manual sync started', array('direction' => $sync_direction));
@@ -777,9 +794,16 @@ class GoogleSheetsSync {
      * 接続テストのAJAXハンドラー
      */
     public function ajax_test_connection() {
+        // デバッグ: 接続テストリクエストが到達
+        gi_log_error('AJAX test connection request received', array(
+            'user_id' => get_current_user_id(),
+            'post_data' => $_POST
+        ));
+        
         check_ajax_referer('gi_sheets_nonce', 'nonce');
         
         if (!current_user_can('edit_posts')) {
+            gi_log_error('Permission denied for connection test', array('user_id' => get_current_user_id()));
             wp_send_json_error('Permission denied');
         }
         
