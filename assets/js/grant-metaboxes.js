@@ -1,24 +1,64 @@
 /**
- * 助成金投稿メタボックス用 JavaScript
+ * 助成金投稿メタボックス用 JavaScript (WordPress標準タクソノミー版)
  * 
- * Google Sheets連携対応の投稿編集画面機能
- * - 都道府県名の自動生成
- * - フィールド間の連動
- * - リアルタイム同期
+ * WordPress標準タクソノミー + ACFフィールドのハイブリッド管理
+ * - カテゴリー・都道府県・市町村: WordPress標準タクソノミー
+ * - その他のフィールド: ACF維持
  */
 
 (function($) {
     'use strict';
     
     $(document).ready(function() {
-        initGrantMetaboxes();
+        initGrantTaxonomyMetaboxes();
     });
     
-    function initGrantMetaboxes() {
-        // 都道府県コード変更時の都道府県名自動生成
-        $('#target_prefecture').on('change', function() {
-            updatePrefectureName($(this).val());
+    function initGrantTaxonomyMetaboxes() {
+        // ==========
+        // 1. タクソノミー関連機能
+        // ==========
+        
+        // 都道府県：全国対象チェックボックス
+        $('#select_all_prefectures').on('change', function() {
+            const isChecked = $(this).is(':checked');
+            $('.prefecture-checkbox').prop('checked', isChecked);
         });
+        
+        // 都道府県：個別チェックボックス変更時
+        $('.prefecture-checkbox').on('change', function() {
+            const totalPrefectures = $('.prefecture-checkbox').length;
+            const checkedPrefectures = $('.prefecture-checkbox:checked').length;
+            $('#select_all_prefectures').prop('checked', totalPrefectures === checkedPrefectures);
+        });
+        
+        // 市町村：検索機能
+        $('#municipality_search').on('input', function() {
+            const searchTerm = $(this).val().toLowerCase();
+            $('.municipality-option').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(text.includes(searchTerm));
+            });
+        });
+        
+        // カテゴリー追加
+        $('#add_grant_category').on('click', function() {
+            const categoryName = $('#new_grant_category').val().trim();
+            if (categoryName) {
+                addNewTaxonomyTerm('grant_category', categoryName, 'category');
+            }
+        });
+        
+        // 市町村追加
+        $('#add_municipality').on('click', function() {
+            const municipalityName = $('#new_municipality').val().trim();
+            if (municipalityName) {
+                addNewTaxonomyTerm('grant_municipality', municipalityName, 'municipality');
+            }
+        });
+        
+        // ==========
+        // 2. ACFフィールド関連機能（既存機能維持）
+        // ==========
         
         // 助成金額（数値）変更時の表示用金額自動生成
         $('#max_amount_numeric').on('change', function() {
@@ -30,88 +70,110 @@
             updateDeadlineDisplay($(this).val());
         });
         
-        // 地域制限の変更時に都道府県・市町村フィールドの表示制御
-        $('#regional_limitation').on('change', function() {
-            toggleLocationFields($(this).val());
-        });
-        
         // 組織タイプ変更時のガイダンス表示
         $('#organization_type').on('change', function() {
             showOrganizationGuidance($(this).val());
         });
         
-        // 初期表示時の設定
-        toggleLocationFields($('#regional_limitation').val());
-        
         // フィールドの変更を検知してGoogle Sheets同期を提案
         trackFieldChanges();
+        
+        // 初期状態設定
+        checkInitialSelections();
     }
     
     /**
-     * 都道府県名の自動生成
+     * 新しいタクソノミータームを追加
      */
-    function updatePrefectureName(prefectureCode) {
-        const prefectureNames = {
-            '': '',
-            'hokkaido': '北海道',
-            'aomori': '青森県',
-            'iwate': '岩手県',
-            'miyagi': '宮城県',
-            'akita': '秋田県',
-            'yamagata': '山形県',
-            'fukushima': '福島県',
-            'ibaraki': '茨城県',
-            'tochigi': '栃木県',
-            'gunma': '群馬県',
-            'saitama': '埼玉県',
-            'chiba': '千葉県',
-            'tokyo': '東京都',
-            'kanagawa': '神奈川県',
-            'niigata': '新潟県',
-            'toyama': '富山県',
-            'ishikawa': '石川県',
-            'fukui': '福井県',
-            'yamanashi': '山梨県',
-            'nagano': '長野県',
-            'gifu': '岐阜県',
-            'shizuoka': '静岡県',
-            'aichi': '愛知県',
-            'mie': '三重県',
-            'shiga': '滋賀県',
-            'kyoto': '京都府',
-            'osaka': '大阪府',
-            'hyogo': '兵庫県',
-            'nara': '奈良県',
-            'wakayama': '和歌山県',
-            'tottori': '鳥取県',
-            'shimane': '島根県',
-            'okayama': '岡山県',
-            'hiroshima': '広島県',
-            'yamaguchi': '山口県',
-            'tokushima': '徳島県',
-            'kagawa': '香川県',
-            'ehime': '愛媛県',
-            'kochi': '高知県',
-            'fukuoka': '福岡県',
-            'saga': '佐賀県',
-            'nagasaki': '長崎県',
-            'kumamoto': '熊本県',
-            'oita': '大分県',
-            'miyazaki': '宮崎県',
-            'kagoshima': '鹿児島県',
-            'okinawa': '沖縄県'
-        };
+    function addNewTaxonomyTerm(taxonomy, termName, type) {
+        $.ajax({
+            url: grantMetaboxes.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'gi_add_taxonomy_term',
+                taxonomy: taxonomy,
+                term_name: termName,
+                nonce: grantMetaboxes.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    // 新しいタームをリストに追加
+                    const termId = response.data.term_id;
+                    const termName = response.data.name;
+                    
+                    let targetContainer = '';
+                    let inputName = '';
+                    
+                    if (type === 'category') {
+                        targetContainer = '#grant-category-selection';
+                        inputName = 'grant_categories[]';
+                        $('#new_grant_category').val('');
+                    } else if (type === 'municipality') {
+                        targetContainer = '#grant-municipality-selection';
+                        inputName = 'grant_municipalities[]';
+                        $('#new_municipality').val('');
+                    }
+                    
+                    const newOption = `
+                        <label style="display: block; margin-bottom: 6px;" class="${type === 'municipality' ? 'municipality-option' : ''}">
+                            <input type="checkbox" 
+                                   name="${inputName}" 
+                                   value="${termId}"
+                                   checked>
+                            ${termName}
+                            <span style="color: #666;">（0件）</span>
+                        </label>
+                    `;
+                    
+                    // 追加ボタンの直前に挿入
+                    $(targetContainer + ' > div:last-child').before(newOption);
+                    
+                    showNotice('success', `「${termName}」を追加しました。`);
+                } else {
+                    showNotice('error', `追加に失敗しました: ${response.data}`);
+                }
+            },
+            error: function() {
+                showNotice('error', '通信エラーが発生しました。');
+            }
+        });
+    }
+    
+    /**
+     * 初期選択状態をチェック
+     */
+    function checkInitialSelections() {
+        // 都道府県の全選択状態をチェック
+        const totalPrefectures = $('.prefecture-checkbox').length;
+        const checkedPrefectures = $('.prefecture-checkbox:checked').length;
+        $('#select_all_prefectures').prop('checked', totalPrefectures === checkedPrefectures && totalPrefectures > 0);
+    }
+    
+    /**
+     * 通知メッセージを表示
+     */
+    function showNotice(type, message) {
+        const noticeClass = type === 'success' ? 'notice-success' : 'notice-error';
+        const notice = $(`
+            <div class="notice ${noticeClass} is-dismissible" style="margin: 10px 0;">
+                <p>${message}</p>
+                <button type="button" class="notice-dismiss">
+                    <span class="screen-reader-text">この通知を閉じる</span>
+                </button>
+            </div>
+        `);
         
-        const prefectureName = prefectureNames[prefectureCode] || '';
-        $('#prefecture_name').val(prefectureName);
+        $('#post').prepend(notice);
         
-        // 視覚的フィードバック
-        if (prefectureName) {
-            $('#prefecture_name').css('background-color', '#f0fff0');
-            setTimeout(function() {
-                $('#prefecture_name').css('background-color', '');
-            }, 1000);
-        }
+        // 自動で5秒後に消す
+        setTimeout(function() {
+            notice.fadeOut();
+        }, 5000);
+        
+        // 閉じるボタン
+        notice.find('.notice-dismiss').on('click', function() {
+            notice.fadeOut();
+        });
     }
     
     /**
@@ -271,14 +333,18 @@
     function trackFieldChanges() {
         let hasChanges = false;
         
-        // 主要フィールドの変更を追跡
+        // 主要フィールドの変更を追跡（タクソノミー + ACFフィールド）
         const importantFields = [
-            '#target_prefecture', '#target_municipality', 
-            '#application_status', '#max_amount_numeric',
-            '#organization', '#deadline_date'
+            'input[name="grant_categories[]"]',      // カテゴリータクソノミー
+            'input[name="grant_prefectures[]"]',     // 都道府県タクソノミー
+            'input[name="grant_municipalities[]"]',  // 市町村タクソノミー
+            '#application_status',                   // ACFフィールド
+            '#max_amount_numeric',                   // ACFフィールド
+            '#organization',                         // ACFフィールド
+            '#deadline_date'                         // ACFフィールド
         ];
         
-        $(importantFields.join(', ')).on('change', function() {
+        $(document).on('change', importantFields.join(', '), function() {
             if (!hasChanges) {
                 hasChanges = true;
                 showSyncReminder();

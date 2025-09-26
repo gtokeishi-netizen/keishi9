@@ -1,12 +1,13 @@
 <?php
 /**
- * 助成金投稿用カスタムメタボックス
+ * 助成金投稿用カスタムメタボックス (WordPress標準タクソノミー版)
  * 
  * Google Sheetsから同期される都道府県、助成金カテゴリー、対象市町村を
- * WordPressの標準的な投稿編集画面のサイドバーで管理
+ * WordPress標準のタクソノミー機能として投稿編集画面のサイドバーで管理
+ * ACFフィールドはそのまま維持し、特定の3項目のみタクソノミー化
  * 
  * @package Grant_Insight_Perfect
- * @version 1.0.0
+ * @version 2.0.0
  */
 
 // セキュリティチェック
@@ -33,9 +34,26 @@ class GrantPostMetaboxes {
     
     /**
      * 助成金投稿用メタボックスを追加
+     * 都道府県・カテゴリー・市町村はWordPress標準タクソノミー使用
+     * その他のフィールドはACFを維持
      */
     public function add_grant_metaboxes() {
-        // 助成金投稿タイプのみに適用
+        // WordPress標準のタクソノミーメタボックスを置き換え
+        // デフォルトのタクソノミーメタボックスを非表示にして、カスタム版を表示
+        remove_meta_box('grant_categorydiv', 'grant', 'side');
+        remove_meta_box('grant_prefecturediv', 'grant', 'side');
+        remove_meta_box('grant_municipalitydiv', 'grant', 'side');
+        
+        // カスタムタクソノミーメタボックス
+        add_meta_box(
+            'grant-category-metabox',
+            '📂 助成金カテゴリー',
+            array($this, 'render_category_metabox'),
+            'grant',
+            'side',
+            'high'
+        );
+        
         add_meta_box(
             'grant-prefecture-metabox',
             '📍 対象都道府県',
@@ -54,9 +72,10 @@ class GrantPostMetaboxes {
             'high'
         );
         
+        // ACFフィールド用メタボックス（既存フィールドを維持）
         add_meta_box(
             'grant-status-metabox',
-            '📋 申請・ステータス情報',
+            '📋 申請・ステータス情報（ACF）',
             array($this, 'render_status_metabox'),
             'grant',
             'side',
@@ -92,72 +111,130 @@ class GrantPostMetaboxes {
     }
     
     /**
-     * 対象都道府県メタボックス
+     * 助成金カテゴリーメタボックス（WordPress標準タクソノミー）
      */
-    public function render_prefecture_metabox($post) {
-        wp_nonce_field('grant_metabox_nonce', 'grant_metabox_nonce_field');
+    public function render_category_metabox($post) {
+        wp_nonce_field('grant_taxonomy_nonce', 'grant_taxonomy_nonce_field');
         
-        $target_prefecture = get_field('target_prefecture', $post->ID);
-        $prefecture_name = get_field('prefecture_name', $post->ID);
-        $regional_limitation = get_field('regional_limitation', $post->ID);
+        $categories = get_terms(array(
+            'taxonomy' => 'grant_category',
+            'hide_empty' => false
+        ));
+        
+        $post_categories = wp_get_post_terms($post->ID, 'grant_category', array('fields' => 'ids'));
         
         ?>
         <div class="grant-metabox-content">
-            <p>
-                <label for="target_prefecture"><strong>都道府県コード:</strong></label><br>
-                <select name="target_prefecture" id="target_prefecture" style="width: 100%;">
-                    <option value="">全国対象</option>
-                    <?php
-                    $prefectures = $this->get_prefecture_options();
-                    foreach ($prefectures as $code => $name) {
-                        echo '<option value="' . esc_attr($code) . '"' . selected($target_prefecture, $code, false) . '>' . esc_html($name) . '</option>';
-                    }
-                    ?>
-                </select>
-            </p>
-            
-            <p>
-                <label for="prefecture_name"><strong>都道府県名:</strong></label><br>
-                <input type="text" name="prefecture_name" id="prefecture_name" value="<?php echo esc_attr($prefecture_name); ?>" 
-                       style="width: 100%;" readonly placeholder="自動生成されます">
-                <small>※都道府県コードから自動生成</small>
-            </p>
-            
-            <p>
-                <label for="regional_limitation"><strong>地域制限:</strong></label><br>
-                <select name="regional_limitation" id="regional_limitation" style="width: 100%;">
-                    <option value="nationwide" <?php selected($regional_limitation, 'nationwide'); ?>>全国対象</option>
-                    <option value="prefecture_only" <?php selected($regional_limitation, 'prefecture_only'); ?>>都道府県内限定</option>
-                    <option value="municipality_only" <?php selected($regional_limitation, 'municipality_only'); ?>>市町村限定</option>
-                    <option value="region_group" <?php selected($regional_limitation, 'region_group'); ?>>地域グループ限定</option>
-                    <option value="specific_area" <?php selected($regional_limitation, 'specific_area'); ?>>特定地域限定</option>
-                </select>
-            </p>
+            <div id="grant-category-selection">
+                <?php if (!empty($categories) && !is_wp_error($categories)): ?>
+                    <?php foreach ($categories as $category): ?>
+                        <label style="display: block; margin-bottom: 8px;">
+                            <input type="checkbox" 
+                                   name="grant_categories[]" 
+                                   value="<?php echo esc_attr($category->term_id); ?>"
+                                   <?php checked(in_array($category->term_id, $post_categories)); ?>>
+                            <?php echo esc_html($category->name); ?>
+                            <span style="color: #666;">（<?php echo $category->count; ?>件）</span>
+                        </label>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p style="color: #666;">カテゴリーがありません。まず<a href="<?php echo admin_url('edit-tags.php?taxonomy=grant_category&post_type=grant'); ?>" target="_blank">カテゴリー管理</a>で作成してください。</p>
+                <?php endif; ?>
+                
+                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">
+                    <input type="text" id="new_grant_category" placeholder="新しいカテゴリー名" style="width: 70%;">
+                    <button type="button" id="add_grant_category" class="button button-small">追加</button>
+                </div>
+            </div>
         </div>
+        <?php
+    }
+
+    /**
+     * 対象都道府県メタボックス（WordPress標準タクソノミー）
+     */
+    public function render_prefecture_metabox($post) {
+        $prefectures = get_terms(array(
+            'taxonomy' => 'grant_prefecture',
+            'hide_empty' => false,
+            'orderby' => 'name'
+        ));
         
-        <style>
-        .grant-metabox-content p { margin-bottom: 12px; }
-        .grant-metabox-content label { font-weight: 600; color: #1d2327; }
-        .grant-metabox-content small { color: #646970; }
-        .grant-metabox-content select, .grant-metabox-content input { margin-top: 4px; }
-        </style>
+        $post_prefectures = wp_get_post_terms($post->ID, 'grant_prefecture', array('fields' => 'ids'));
+        
+        ?>
+        <div class="grant-metabox-content">
+            <div id="grant-prefecture-selection" style="max-height: 300px; overflow-y: auto;">
+                <p>
+                    <label>
+                        <input type="checkbox" id="select_all_prefectures"> 
+                        <strong>全国対象（全て選択）</strong>
+                    </label>
+                </p>
+                <div style="border-top: 1px solid #ddd; padding-top: 8px; margin-top: 8px;">
+                    <?php if (!empty($prefectures) && !is_wp_error($prefectures)): ?>
+                        <?php foreach ($prefectures as $prefecture): ?>
+                            <label style="display: block; margin-bottom: 6px;">
+                                <input type="checkbox" 
+                                       name="grant_prefectures[]" 
+                                       value="<?php echo esc_attr($prefecture->term_id); ?>"
+                                       class="prefecture-checkbox"
+                                       <?php checked(in_array($prefecture->term_id, $post_prefectures)); ?>>
+                                <?php echo esc_html($prefecture->name); ?>
+                                <span style="color: #666;">（<?php echo $prefecture->count; ?>件）</span>
+                            </label>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p style="color: #666;">都道府県データがありません。<a href="<?php echo admin_url('admin.php?page=gi-prefecture-debug'); ?>" target="_blank">都道府県デバッグ</a>で初期化してください。</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
         <?php
     }
     
     /**
-     * 対象市町村メタボックス
+     * 対象市町村メタボックス（WordPress標準タクソノミー）
      */
     public function render_municipality_metabox($post) {
-        $target_municipality = get_field('target_municipality', $post->ID);
+        $municipalities = get_terms(array(
+            'taxonomy' => 'grant_municipality',
+            'hide_empty' => false,
+            'orderby' => 'name'
+        ));
+        
+        $post_municipalities = wp_get_post_terms($post->ID, 'grant_municipality', array('fields' => 'ids'));
+        
         ?>
         <div class="grant-metabox-content">
-            <p>
-                <label for="target_municipality"><strong>対象市町村:</strong></label><br>
-                <textarea name="target_municipality" id="target_municipality" 
-                          rows="4" style="width: 100%; resize: vertical;" 
-                          placeholder="例：&#10;新宿区&#10;渋谷区&#10;港区"><?php echo esc_textarea($target_municipality); ?></textarea>
-                <small>複数の場合は改行で区切ってください</small>
-            </p>
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="municipality_search" placeholder="市町村を検索..." style="width: 100%;">
+            </div>
+            
+            <div id="grant-municipality-selection" style="max-height: 250px; overflow-y: auto;">
+                <?php if (!empty($municipalities) && !is_wp_error($municipalities)): ?>
+                    <?php foreach ($municipalities as $municipality): ?>
+                        <label style="display: block; margin-bottom: 6px;" class="municipality-option">
+                            <input type="checkbox" 
+                                   name="grant_municipalities[]" 
+                                   value="<?php echo esc_attr($municipality->term_id); ?>"
+                                   <?php checked(in_array($municipality->term_id, $post_municipalities)); ?>>
+                            <?php echo esc_html($municipality->name); ?>
+                            <span style="color: #666;">（<?php echo $municipality->count; ?>件）</span>
+                        </label>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p style="color: #666;">市町村データがありません。</p>
+                <?php endif; ?>
+                
+                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">
+                    <input type="text" id="new_municipality" placeholder="新しい市町村名" style="width: 70%;">
+                    <button type="button" id="add_municipality" class="button button-small">追加</button>
+                    <small style="display: block; margin-top: 5px; color: #666;">
+                        例：新宿区、渋谷区、札幌市、福岡市
+                    </small>
+                </div>
+            </div>
         </div>
         <?php
     }
@@ -384,7 +461,7 @@ class GrantPostMetaboxes {
     }
     
     /**
-     * メタデータの保存
+     * メタデータとタクソノミーの保存
      */
     public function save_grant_metadata($post_id) {
         // 自動保存やリビジョンをスキップ
@@ -394,44 +471,74 @@ class GrantPostMetaboxes {
         // 助成金投稿タイプのみ対象
         if (get_post_type($post_id) !== 'grant') return;
         
-        // Nonce検証
-        if (!isset($_POST['grant_metabox_nonce_field']) || 
-            !wp_verify_nonce($_POST['grant_metabox_nonce_field'], 'grant_metabox_nonce')) {
+        // Nonce検証（タクソノミー用）
+        if (!isset($_POST['grant_taxonomy_nonce_field']) || 
+            !wp_verify_nonce($_POST['grant_taxonomy_nonce_field'], 'grant_taxonomy_nonce')) {
             return;
         }
         
         // 権限チェック
         if (!current_user_can('edit_post', $post_id)) return;
         
-        // メタデータフィールドのマッピング
-        $meta_fields = array(
-            // 地域情報
-            'target_prefecture' => sanitize_text_field($_POST['target_prefecture'] ?? ''),
-            'prefecture_name' => sanitize_text_field($_POST['prefecture_name'] ?? ''),
-            'target_municipality' => sanitize_textarea_field($_POST['target_municipality'] ?? ''),
-            'regional_limitation' => sanitize_text_field($_POST['regional_limitation'] ?? 'nationwide'),
-            
-            // ステータス情報
+        // ==========
+        // 1. タクソノミーの保存（WordPress標準）
+        // ==========
+        
+        // 助成金カテゴリーの保存
+        if (isset($_POST['grant_categories'])) {
+            $categories = array_map('intval', $_POST['grant_categories']);
+            wp_set_post_terms($post_id, $categories, 'grant_category');
+        } else {
+            // チェックボックスが一つも選択されていない場合は空にする
+            wp_set_post_terms($post_id, array(), 'grant_category');
+        }
+        
+        // 都道府県の保存
+        if (isset($_POST['grant_prefectures'])) {
+            $prefectures = array_map('intval', $_POST['grant_prefectures']);
+            wp_set_post_terms($post_id, $prefectures, 'grant_prefecture');
+        } else {
+            wp_set_post_terms($post_id, array(), 'grant_prefecture');
+        }
+        
+        // 市町村の保存
+        if (isset($_POST['grant_municipalities'])) {
+            $municipalities = array_map('intval', $_POST['grant_municipalities']);
+            wp_set_post_terms($post_id, $municipalities, 'grant_municipality');
+        } else {
+            wp_set_post_terms($post_id, array(), 'grant_municipality');
+        }
+        
+        // ==========
+        // 2. ACFフィールドの保存（既存フィールドを維持）
+        // ==========
+        
+        // ACFフィールドのマッピング（タクソノミー化されていないフィールドのみ）
+        $acf_fields = array(
+            // ステータス情報（ACF維持）
             'application_status' => sanitize_text_field($_POST['application_status'] ?? 'open'),
             'application_method' => sanitize_text_field($_POST['application_method'] ?? 'online'),
             'deadline' => sanitize_text_field($_POST['deadline'] ?? ''),
             'deadline_date' => sanitize_text_field($_POST['deadline_date'] ?? ''),
             
-            // 金額情報
+            // 金額情報（ACF維持）
             'max_amount' => sanitize_text_field($_POST['max_amount'] ?? ''),
             'max_amount_numeric' => intval($_POST['max_amount_numeric'] ?? 0),
             'min_amount' => intval($_POST['min_amount'] ?? 0),
             'subsidy_rate' => sanitize_text_field($_POST['subsidy_rate'] ?? ''),
             
-            // 組織情報
+            // 組織情報（ACF維持）
             'organization' => sanitize_text_field($_POST['organization'] ?? ''),
             'organization_type' => sanitize_text_field($_POST['organization_type'] ?? 'national'),
             'contact_info' => sanitize_textarea_field($_POST['contact_info'] ?? ''),
-            'official_url' => esc_url($_POST['official_url'] ?? '')
+            'official_url' => esc_url($_POST['official_url'] ?? ''),
+            
+            // 地域制限（ACF維持）
+            'regional_limitation' => sanitize_text_field($_POST['regional_limitation'] ?? 'nationwide')
         );
         
         // ACFフィールドとして保存
-        foreach ($meta_fields as $field_key => $value) {
+        foreach ($acf_fields as $field_key => $value) {
             if (function_exists('update_field')) {
                 update_field($field_key, $value, $post_id);
             } else {
@@ -439,15 +546,9 @@ class GrantPostMetaboxes {
             }
         }
         
-        // 都道府県名の自動生成
-        if (!empty($meta_fields['target_prefecture'])) {
-            $prefecture_name = $this->get_prefecture_name_by_code($meta_fields['target_prefecture']);
-            if (function_exists('update_field')) {
-                update_field('prefecture_name', $prefecture_name, $post_id);
-            } else {
-                update_post_meta($post_id, 'prefecture_name', $prefecture_name);
-            }
-        }
+        // ==========
+        // 3. 同期メタデータとGoogle Sheets連携
+        // ==========
         
         // 同期メタデータを更新
         update_post_meta($post_id, '_gi_last_modified', current_time('mysql'));
@@ -472,68 +573,77 @@ class GrantPostMetaboxes {
     }
     
     /**
-     * 都道府県選択肢を取得
+     * タクソノミーのタームデータをJSONで取得するヘルパー
      */
-    private function get_prefecture_options() {
-        return array(
-            'hokkaido' => '北海道',
-            'aomori' => '青森県',
-            'iwate' => '岩手県',
-            'miyagi' => '宮城県',
-            'akita' => '秋田県',
-            'yamagata' => '山形県',
-            'fukushima' => '福島県',
-            'ibaraki' => '茨城県',
-            'tochigi' => '栃木県',
-            'gunma' => '群馬県',
-            'saitama' => '埼玉県',
-            'chiba' => '千葉県',
-            'tokyo' => '東京都',
-            'kanagawa' => '神奈川県',
-            'niigata' => '新潟県',
-            'toyama' => '富山県',
-            'ishikawa' => '石川県',
-            'fukui' => '福井県',
-            'yamanashi' => '山梨県',
-            'nagano' => '長野県',
-            'gifu' => '岐阜県',
-            'shizuoka' => '静岡県',
-            'aichi' => '愛知県',
-            'mie' => '三重県',
-            'shiga' => '滋賀県',
-            'kyoto' => '京都府',
-            'osaka' => '大阪府',
-            'hyogo' => '兵庫県',
-            'nara' => '奈良県',
-            'wakayama' => '和歌山県',
-            'tottori' => '鳥取県',
-            'shimane' => '島根県',
-            'okayama' => '岡山県',
-            'hiroshima' => '広島県',
-            'yamaguchi' => '山口県',
-            'tokushima' => '徳島県',
-            'kagawa' => '香川県',
-            'ehime' => '愛媛県',
-            'kochi' => '高知県',
-            'fukuoka' => '福岡県',
-            'saga' => '佐賀県',
-            'nagasaki' => '長崎県',
-            'kumamoto' => '熊本県',
-            'oita' => '大分県',
-            'miyazaki' => '宮崎県',
-            'kagoshima' => '鹿児島県',
-            'okinawa' => '沖縄県'
-        );
-    }
-    
-    /**
-     * 都道府県コードから名前を取得
-     */
-    private function get_prefecture_name_by_code($code) {
-        $prefectures = $this->get_prefecture_options();
-        return isset($prefectures[$code]) ? $prefectures[$code] : '';
+    private function get_taxonomy_terms_json($taxonomy) {
+        $terms = get_terms(array(
+            'taxonomy' => $taxonomy,
+            'hide_empty' => false
+        ));
+        
+        if (is_wp_error($terms)) {
+            return '[]';
+        }
+        
+        $term_data = array();
+        foreach ($terms as $term) {
+            $term_data[] = array(
+                'id' => $term->term_id,
+                'name' => $term->name,
+                'slug' => $term->slug,
+                'count' => $term->count
+            );
+        }
+        
+        return json_encode($term_data);
     }
 }
+
+// タクソノミータームを追加するAJAXハンドラー
+add_action('wp_ajax_gi_add_taxonomy_term', function() {
+    check_ajax_referer('grant_metaboxes_nonce', 'nonce');
+    
+    if (!current_user_can('manage_categories')) {
+        wp_send_json_error('権限がありません');
+        return;
+    }
+    
+    $taxonomy = sanitize_text_field($_POST['taxonomy']);
+    $term_name = sanitize_text_field($_POST['term_name']);
+    
+    // 許可されたタクソノミーのみ
+    $allowed_taxonomies = array('grant_category', 'grant_municipality', 'grant_prefecture');
+    if (!in_array($taxonomy, $allowed_taxonomies)) {
+        wp_send_json_error('無効なタクソノミーです');
+        return;
+    }
+    
+    if (empty($term_name)) {
+        wp_send_json_error('タerm名が入力されていません');
+        return;
+    }
+    
+    // タームが既に存在するかチェック
+    $existing_term = term_exists($term_name, $taxonomy);
+    if ($existing_term) {
+        wp_send_json_error('このタームは既に存在します');
+        return;
+    }
+    
+    // タームを作成
+    $result = wp_insert_term($term_name, $taxonomy);
+    
+    if (is_wp_error($result)) {
+        wp_send_json_error('タームの作成に失敗しました: ' . $result->get_error_message());
+        return;
+    }
+    
+    wp_send_json_success(array(
+        'term_id' => $result['term_id'],
+        'name' => $term_name,
+        'taxonomy' => $taxonomy
+    ));
+});
 
 // 単一投稿同期のAJAXハンドラー
 add_action('wp_ajax_gi_sync_single_post', function() {
