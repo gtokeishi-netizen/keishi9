@@ -68,8 +68,6 @@ class SheetsAdminUI {
      * 管理画面用スクリプトとスタイル
      */
     public function enqueue_admin_scripts($hook) {
-        // デバッグ：フック情報をログに記録
-        gi_log_error('Admin scripts hook', array('hook' => $hook, 'contains_grant_sheets' => strpos($hook, 'grant-sheets-sync') !== false));
         
         if (strpos($hook, 'grant-sheets-sync') === false) {
             return;
@@ -79,11 +77,6 @@ class SheetsAdminUI {
         $js_path = get_template_directory_uri() . '/assets/js/sheets-admin.js';
         $js_file_path = get_template_directory() . '/assets/js/sheets-admin.js';
         
-        gi_log_error('Enqueuing admin scripts', array(
-            'js_url' => $js_path,
-            'js_file_exists' => file_exists($js_file_path),
-            'hook' => $hook
-        ));
         
         wp_enqueue_script(
             'gi-sheets-admin',
@@ -106,7 +99,6 @@ class SheetsAdminUI {
             )
         );
         
-        gi_log_error('Localizing script data', $localize_data);
         
         wp_localize_script('gi-sheets-admin', 'giSheetsAdmin', $localize_data);
         
@@ -114,10 +106,6 @@ class SheetsAdminUI {
         $css_path = get_template_directory_uri() . '/assets/css/sheets-admin.css';
         $css_file_path = get_template_directory() . '/assets/css/sheets-admin.css';
         
-        gi_log_error('CSS file check', array(
-            'css_url' => $css_path,
-            'css_file_exists' => file_exists($css_file_path)
-        ));
         
         wp_enqueue_style(
             'gi-sheets-admin-style',
@@ -379,8 +367,7 @@ class SheetsAdminUI {
                             }
                         }
                     } catch (Exception $e) {
-                        // エラーログに記録（フォールバック値を使用）
-                        error_log('Webhook handler initialization failed, using fallback values: ' . $e->getMessage());
+
                     }
                     ?>
                     
@@ -540,8 +527,7 @@ class SheetsAdminUI {
             echo '</div>';
             echo '</div>';
             
-            // エラーログに記録
-            error_log('Sheets Admin UI Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+
         }
     }
     
@@ -749,7 +735,7 @@ if (is_admin()) {
                 gi_init_sheets_admin_ui();
             }
         } catch (Exception $e) {
-            error_log('Failed to initialize SheetsAdminUI: ' . $e->getMessage());
+
         }
     }, 10);
 
@@ -757,7 +743,7 @@ if (is_admin()) {
     add_action('wp_loaded', function() {
         try {
             if (!class_exists('SheetsAdminUI')) {
-                error_log('SheetsAdminUI class not available during wp_loaded hook');
+
                 return;
             }
             
@@ -765,7 +751,7 @@ if (is_admin()) {
             SheetsAdminUI::getInstance();
             
         } catch (Exception $e) {
-            error_log('SheetsAdminUI wp_loaded fallback failed: ' . $e->getMessage());
+
         }
     }, 20);
 }

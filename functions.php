@@ -57,7 +57,7 @@ foreach ($required_files as $file) {
     } else {
         // デバッグモードの場合はエラーログに記録
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Grant Insight Theme: Required file not found - ' . $file_path);
+
         }
     }
 }
@@ -69,7 +69,7 @@ if (file_exists($card_unified_path)) {
     require_once $card_unified_path;
 } else {
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('Grant Insight Theme: grant-card-unified.php not found at ' . $card_unified_path);
+
     }
 }
 
@@ -91,7 +91,7 @@ if (!function_exists('gi_render_card')) {
  */
 function gi_final_init() {  // ✅ 修正
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        error_log('Grant Insight Theme v' . GI_THEME_VERSION . ': Clean structure loaded - 8 files organized in logical directories');
+
     }
 }
 add_action('wp_loaded', 'gi_final_init', 999);
