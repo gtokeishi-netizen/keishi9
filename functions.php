@@ -37,6 +37,7 @@ $required_files = array(
     'admin/admin-customization.php',  // 管理画面カスタマイズ
     'admin/fields-configuration.php', // ACF設定とフィールド定義
     'admin/sheets-admin-ui.php',     // Google Sheets管理UI
+    'admin/post-metaboxes.php',      // 投稿編集画面メタボックス
     
     // Feature files
     'features/card-rendering.php',       // カードレンダリング・表示機能
