@@ -1,10 +1,10 @@
 <?php
 /**
- * Stylish Monochrome Single Grant Template - Photo-like Aesthetics
- * スタイリッシュな白黒助成金詳細ページ - 写真のような美学
+ * Grant Single Page - Stylish Monochrome Design
+ * 助成金詳細ページ - スタイリッシュモノクロームデザイン
  * 
  * @package Grant_Insight_Perfect
- * @version 11.0.0-monochrome
+ * @version 11.0.0-stylish
  */
 
 get_header();
@@ -18,7 +18,7 @@ if (!have_posts()) {
 the_post();
 $post_id = get_the_ID();
 
-// Essential ACF field retrieval - focused on key information
+// Comprehensive ACF field retrieval
 $grant_data = array(
     // 基本情報
     'organization' => get_field('organization', $post_id) ?: '',
@@ -27,48 +27,57 @@ $grant_data = array(
     // 金額情報
     'max_amount' => get_field('max_amount', $post_id) ?: '',
     'max_amount_numeric' => intval(get_field('max_amount_numeric', $post_id)),
+    'min_amount' => intval(get_field('min_amount', $post_id)),
     'subsidy_rate' => get_field('subsidy_rate', $post_id) ?: '',
+    'amount_note' => get_field('amount_note', $post_id) ?: '',
     
     // 期間・締切情報
     'deadline' => get_field('deadline', $post_id) ?: '',
     'deadline_date' => get_field('deadline_date', $post_id) ?: '',
+    'application_period' => get_field('application_period', $post_id) ?: '',
+    'deadline_note' => get_field('deadline_note', $post_id) ?: '',
     'application_status' => get_field('application_status', $post_id) ?: 'open',
     
     // 対象・条件
     'grant_target' => get_field('grant_target', $post_id) ?: '',
+    'eligible_expenses' => get_field('eligible_expenses', $post_id) ?: '',
     'grant_difficulty' => get_field('grant_difficulty', $post_id) ?: 'normal',
     'grant_success_rate' => intval(get_field('grant_success_rate', $post_id)),
+    'required_documents' => get_field('required_documents', $post_id) ?: '',
     
     // 申請・連絡先
     'application_method' => get_field('application_method', $post_id) ?: '',
     'contact_info' => get_field('contact_info', $post_id) ?: '',
     'official_url' => get_field('official_url', $post_id) ?: '',
+    'external_link' => get_field('external_link', $post_id) ?: '',
+    
+    // 管理設定
+    'is_featured' => get_field('is_featured', $post_id) ?: false,
+    'views_count' => intval(get_field('views_count', $post_id)),
+    'last_updated' => get_field('last_updated', $post_id) ?: '',
     
     // AI関連
     'ai_summary' => get_field('ai_summary', $post_id) ?: get_post_meta($post_id, 'ai_summary', true),
-    
-    // 管理設定
-    'views_count' => intval(get_field('views_count', $post_id)),
 );
 
-// Taxonomy data
+// Comprehensive taxonomy data
 $taxonomies = array(
     'categories' => get_the_terms($post_id, 'grant_category'),
     'prefectures' => get_the_terms($post_id, 'grant_prefecture'),
     'municipalities' => get_the_terms($post_id, 'grant_municipality'),
-    'tags' => get_the_terms($post_id, 'post_tag'),
+    'tags' => get_the_tags($post_id),
 );
 
 $main_category = ($taxonomies['categories'] && !is_wp_error($taxonomies['categories'])) ? $taxonomies['categories'][0] : null;
 $main_prefecture = ($taxonomies['prefectures'] && !is_wp_error($taxonomies['prefectures'])) ? $taxonomies['prefectures'][0] : null;
 
-// Format amount
+// Format amounts
 $formatted_amount = '';
 $max_amount_yen = $grant_data['max_amount_numeric'];
 if ($max_amount_yen > 0) {
-    if ($max_amount_yen >= 100000000) { // 1億円以上
+    if ($max_amount_yen >= 100000000) {
         $formatted_amount = number_format($max_amount_yen / 100000000, 1) . '億円';
-    } elseif ($max_amount_yen >= 10000) { // 1万円以上
+    } elseif ($max_amount_yen >= 10000) {
         $formatted_amount = number_format($max_amount_yen / 10000) . '万円';
     } else {
         $formatted_amount = number_format($max_amount_yen) . '円';
@@ -76,6 +85,26 @@ if ($max_amount_yen > 0) {
 } elseif ($grant_data['max_amount']) {
     $formatted_amount = $grant_data['max_amount'];
 }
+
+// Organization type mapping
+$org_type_labels = array(
+    'national' => '国（省庁）',
+    'prefecture' => '都道府県',
+    'city' => '市区町村', 
+    'public_org' => '公的機関',
+    'private_org' => '民間団体',
+    'foundation' => '財団法人',
+    'jgrants' => 'Jグランツ',
+    'other' => 'その他'
+);
+
+// Application method mapping
+$method_labels = array(
+    'online' => 'オンライン申請',
+    'mail' => '郵送申請',
+    'visit' => '窓口申請',
+    'mixed' => 'オンライン・郵送併用'
+);
 
 // Deadline calculation
 $deadline_info = '';
@@ -104,24 +133,24 @@ if ($grant_data['deadline_date']) {
     $deadline_info = $grant_data['deadline'];
 }
 
-// Status mapping
-$status_configs = array(
-    'open' => array('label' => '募集中', 'class' => 'status-open'),
-    'upcoming' => array('label' => '募集予定', 'class' => 'status-upcoming'),
-    'closed' => array('label' => '募集終了', 'class' => 'status-closed'),
-    'suspended' => array('label' => '一時停止', 'class' => 'status-suspended')
-);
-$status_data = $status_configs[$grant_data['application_status']] ?? $status_configs['open'];
-
-// Difficulty mapping
+// Difficulty configuration
 $difficulty_configs = array(
-    'easy' => array('label' => '易しい', 'class' => 'difficulty-easy'),
-    'normal' => array('label' => '普通', 'class' => 'difficulty-normal'),
-    'hard' => array('label' => '難しい', 'class' => 'difficulty-hard'),
-    'expert' => array('label' => '専門的', 'class' => 'difficulty-expert')
+    'easy' => array('label' => '易しい', 'dots' => 1),
+    'normal' => array('label' => '普通', 'dots' => 2),
+    'hard' => array('label' => '難しい', 'dots' => 3),
+    'expert' => array('label' => '専門的', 'dots' => 4)
 );
 $difficulty = $grant_data['grant_difficulty'];
 $difficulty_data = $difficulty_configs[$difficulty] ?? $difficulty_configs['normal'];
+
+// Status mapping
+$status_configs = array(
+    'open' => array('label' => '募集中', 'class' => 'open'),
+    'upcoming' => array('label' => '募集予定', 'class' => 'upcoming'),
+    'closed' => array('label' => '募集終了', 'class' => 'closed'),
+    'suspended' => array('label' => '一時停止', 'class' => 'suspended')
+);
+$status_data = $status_configs[$grant_data['application_status']] ?? $status_configs['open'];
 
 // Update view count
 $grant_data['views_count']++;
@@ -130,312 +159,369 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
 
 <style>
 /* ===============================================
-   STYLISH MONOCHROME GRANT TEMPLATE - PHOTO-LIKE
-   スタイリッシュな白黒写真のような助成金テンプレート
+   STYLISH MONOCHROME GRANT SINGLE PAGE
    =============================================== */
 
+:root {
+    /* Monochrome Color Palette - Photo-like */
+    --mono-black: #000000;
+    --mono-charcoal: #1a1a1a;
+    --mono-dark-gray: #2d2d2d;
+    --mono-gray: #4a4a4a;
+    --mono-mid-gray: #6b6b6b;
+    --mono-light-gray: #9a9a9a;
+    --mono-pale-gray: #d4d4d4;
+    --mono-off-white: #f8f8f8;
+    --mono-white: #ffffff;
+    
+    /* Accent colors for status */
+    --accent-danger: #dc2626;
+    --accent-warning: #f59e0b;
+    --accent-success: #059669;
+    --accent-info: #2563eb;
+    
+    /* Typography scale */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+    --text-4xl: 2.25rem;
+    --text-5xl: 3rem;
+    
+    /* Spacing scale */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
+    --space-16: 4rem;
+    --space-20: 5rem;
+    
+    /* Shadows - Photo-like depth */
+    --shadow-soft: 0 2px 15px rgba(0, 0, 0, 0.08);
+    --shadow-medium: 0 4px 25px rgba(0, 0, 0, 0.12);
+    --shadow-hard: 0 10px 40px rgba(0, 0, 0, 0.15);
+    --shadow-dramatic: 0 20px 60px rgba(0, 0, 0, 0.25);
+    
+    /* Border radius */
+    --radius-sm: 0.25rem;
+    --radius-base: 0.5rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+    --radius-2xl: 2rem;
+    
+    /* Transitions */
+    --transition-fast: 0.15s ease-out;
+    --transition-base: 0.3s ease-out;
+    --transition-slow: 0.5s ease-out;
+}
+
+/* Reset and base styles */
 * {
     box-sizing: border-box;
 }
 
-:root {
-    /* Monochrome Color System - Photo-like */
-    --pure-white: #ffffff;
-    --paper-white: #fefefe;
-    --light-gray: #f8f9fa;
-    --mid-gray: #e9ecef;
-    --dark-gray: #6c757d;
-    --charcoal: #343a40;
-    --deep-black: #212529;
-    --ink-black: #000000;
-    
-    /* Photo-like gradients */
-    --gradient-subtle: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-    --gradient-strong: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
-    --gradient-accent: linear-gradient(135deg, #000000 0%, #343a40 100%);
-    
-    /* Shadow system - like photography depth */
-    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.08);
-    --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.12);
-    --shadow-strong: 0 8px 32px rgba(0, 0, 0, 0.16);
-    --shadow-dramatic: 0 16px 64px rgba(0, 0, 0, 0.24);
-    
-    /* Typography - Editorial style */
-    --font-display: "Noto Serif JP", Georgia, serif;
-    --font-body: "Noto Sans JP", -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: "SFMono-Regular", Consolas, monospace;
-}
-
-/* Reset and base styles */
-body {
-    margin: 0;
-    padding: 0;
-    font-family: var(--font-body);
-    line-height: 1.6;
-    color: var(--deep-black);
-    background: var(--pure-white);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-/* Main photo-style container */
-.grant-monochrome {
+/* Main container with photo-like styling */
+.grant-stylish {
     max-width: 1200px;
     margin: 0 auto;
-    background: var(--pure-white);
+    padding: var(--space-8) var(--space-4);
+    background: var(--mono-white);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.6;
+    color: var(--mono-charcoal);
     position: relative;
-    overflow: hidden;
 }
 
-/* Header with dramatic photo-style layout */
-.grant-hero {
-    position: relative;
-    padding: 4rem 2rem;
-    background: var(--gradient-subtle);
-    border-bottom: 1px solid var(--mid-gray);
-    overflow: hidden;
+@media (min-width: 768px) {
+    .grant-stylish {
+        padding: var(--space-16) var(--space-8);
+    }
 }
 
-.grant-hero::before {
+/* Film strip header effect */
+.grant-stylish::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
-    background: 
-        radial-gradient(circle at 20% 30%, rgba(0,0,0,0.02) 0%, transparent 50%),
-        radial-gradient(circle at 80% 70%, rgba(0,0,0,0.03) 0%, transparent 50%);
-    pointer-events: none;
+    height: 4px;
+    background: repeating-linear-gradient(
+        90deg,
+        var(--mono-black) 0px,
+        var(--mono-black) 10px,
+        var(--mono-white) 10px,
+        var(--mono-white) 20px
+    );
+    z-index: 1;
 }
 
-.grant-hero-content {
+/* Hero Section - Magazine style */
+.grant-hero {
+    text-align: center;
+    padding: var(--space-16) 0;
+    background: linear-gradient(135deg, var(--mono-off-white) 0%, var(--mono-white) 100%);
+    margin: 0 calc(-1 * var(--space-8)) var(--space-12);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-soft);
     position: relative;
-    z-index: 2;
-    max-width: 800px;
 }
 
-/* Status indicator - minimal and elegant */
-.grant-status {
+@media (min-width: 768px) {
+    .grant-hero {
+        margin: 0 calc(-1 * var(--space-16)) var(--space-16);
+        padding: var(--space-20) var(--space-8);
+    }
+}
+
+/* Status badge - Polaroid style */
+.status-badge {
     display: inline-block;
-    padding: 0.5rem 1.5rem;
-    background: var(--ink-black);
-    color: var(--pure-white);
-    font-size: 0.875rem;
+    padding: var(--space-2) var(--space-4);
+    background: var(--mono-black);
+    color: var(--mono-white);
+    font-size: var(--text-sm);
     font-weight: 600;
-    letter-spacing: 0.05em;
     text-transform: uppercase;
-    margin-bottom: 2rem;
+    letter-spacing: 0.05em;
+    border-radius: var(--radius-base);
+    margin-bottom: var(--space-6);
+    box-shadow: var(--shadow-soft);
     position: relative;
 }
 
-.grant-status.status-open::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: -0.5rem;
-    width: 0.5rem;
-    height: 0.5rem;
-    background: #22c55e;
-    border-radius: 50%;
-    transform: translateY(-50%);
-    animation: pulse 2s infinite;
+.status-badge.open {
+    background: var(--accent-success);
 }
 
-.grant-status.status-urgent {
-    background: var(--deep-black);
-    animation: urgentPulse 1s ease-in-out infinite alternate;
+.status-badge.warning {
+    background: var(--accent-warning);
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+.status-badge.urgent {
+    background: var(--accent-danger);
 }
 
-@keyframes urgentPulse {
-    0% { transform: scale(1); }
-    100% { transform: scale(1.02); }
+.status-badge.closed {
+    background: var(--mono-gray);
 }
 
-/* Typography - Editorial magazine style */
+/* Typography - Editorial style */
 .grant-title {
-    font-family: var(--font-display);
-    font-size: clamp(2rem, 5vw, 3.5rem);
-    font-weight: 700;
-    line-height: 1.1;
-    margin: 0 0 1.5rem 0;
-    color: var(--ink-black);
+    font-size: var(--text-3xl);
+    font-weight: 800;
+    line-height: 1.2;
+    color: var(--mono-black);
+    margin: 0 0 var(--space-6);
     letter-spacing: -0.02em;
 }
 
-.grant-summary {
-    font-size: 1.25rem;
-    line-height: 1.5;
-    color: var(--dark-gray);
-    margin-bottom: 2.5rem;
+@media (min-width: 768px) {
+    .grant-title {
+        font-size: var(--text-5xl);
+    }
+}
+
+.grant-subtitle {
+    font-size: var(--text-lg);
+    color: var(--mono-gray);
+    margin-bottom: var(--space-8);
     font-weight: 400;
+    line-height: 1.5;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-/* Key metrics - photo frame style */
-.grant-metrics {
+/* Key Information Grid - Newspaper layout */
+.key-info-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 2rem;
-    margin: 3rem 0;
-    padding: 2rem;
-    background: var(--paper-white);
-    border: 1px solid var(--mid-gray);
-    position: relative;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--space-6);
+    margin-bottom: var(--space-16);
 }
 
-.grant-metrics::before {
+.info-card {
+    background: var(--mono-white);
+    border: 2px solid var(--mono-pale-gray);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    text-align: center;
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+}
+
+.info-card::before {
     content: '';
     position: absolute;
     top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(45deg, transparent 49%, rgba(0,0,0,0.01) 50%, transparent 51%);
-    pointer-events: none;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left var(--transition-slow);
 }
 
-.metric-item {
-    text-align: center;
-    padding: 1rem;
-    position: relative;
+.info-card:hover {
+    border-color: var(--mono-black);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
 }
 
-.metric-label {
-    display: block;
-    font-size: 0.875rem;
-    color: var(--dark-gray);
+.info-card:hover::before {
+    left: 100%;
+}
+
+.info-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--mono-black);
+    color: var(--mono-white);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-4);
+    font-size: var(--text-xl);
+}
+
+.info-label {
+    font-size: var(--text-xs);
+    color: var(--mono-mid-gray);
     text-transform: uppercase;
+    font-weight: 600;
     letter-spacing: 0.1em;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
+    margin-bottom: var(--space-2);
 }
 
-.metric-value {
-    display: block;
-    font-family: var(--font-display);
-    font-size: 2rem;
+.info-value {
+    font-size: var(--text-2xl);
     font-weight: 700;
-    color: var(--ink-black);
-    line-height: 1;
+    color: var(--mono-black);
+    line-height: 1.2;
 }
 
-.metric-value.highlight {
-    position: relative;
+.info-value.highlight {
+    background: linear-gradient(135deg, var(--mono-black), var(--mono-dark-gray));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
-.metric-value.highlight::after {
-    content: '';
-    position: absolute;
-    bottom: -0.25rem;
-    left: 50%;
-    width: 3rem;
-    height: 2px;
-    background: var(--ink-black);
-    transform: translateX(-50%);
-}
-
-/* Content layout - Magazine style */
-.grant-content {
+/* Content Layout - Magazine columns */
+.content-layout {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: 4rem;
-    padding: 4rem 2rem;
-    position: relative;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-12);
+    align-items: start;
 }
 
 @media (max-width: 1024px) {
-    .grant-content {
+    .content-layout {
         grid-template-columns: 1fr;
-        gap: 3rem;
-        padding: 3rem 2rem;
+        gap: var(--space-8);
     }
 }
 
 /* Main content sections */
 .content-main {
-    max-width: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-10);
 }
 
 .content-section {
-    margin-bottom: 4rem;
+    background: var(--mono-white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    box-shadow: var(--shadow-soft);
+    border-left: 4px solid var(--mono-black);
     position: relative;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--mono-pale-gray);
+}
+
+.section-icon {
+    width: 32px;
+    height: 32px;
+    color: var(--mono-black);
 }
 
 .section-title {
-    font-family: var(--font-display);
-    font-size: 1.75rem;
+    font-size: var(--text-xl);
     font-weight: 700;
-    color: var(--ink-black);
-    margin-bottom: 1.5rem;
-    position: relative;
-    padding-bottom: 1rem;
-}
-
-.section-title::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 4rem;
-    height: 1px;
-    background: var(--ink-black);
+    color: var(--mono-black);
+    margin: 0;
 }
 
 .section-content {
-    font-size: 1.125rem;
+    color: var(--mono-charcoal);
     line-height: 1.7;
-    color: var(--charcoal);
 }
 
 .section-content p {
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--space-4);
 }
 
-.section-content ul, 
+.section-content ul,
 .section-content ol {
-    padding-left: 2rem;
-    margin-bottom: 1.5rem;
+    margin: var(--space-4) 0;
+    padding-left: var(--space-6);
 }
 
 .section-content li {
-    margin-bottom: 0.75rem;
+    margin-bottom: var(--space-2);
 }
 
-/* Information table - Clean data presentation */
+/* Information table - Technical specs style */
 .info-table {
     width: 100%;
-    border-collapse: collapse;
-    margin: 2rem 0;
-    background: var(--pure-white);
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--mono-white);
+    border-radius: var(--radius-base);
+    overflow: hidden;
     box-shadow: var(--shadow-soft);
 }
 
 .info-table th,
 .info-table td {
-    padding: 1.25rem 1.5rem;
+    padding: var(--space-4) var(--space-5);
     text-align: left;
-    border-bottom: 1px solid var(--mid-gray);
+    border-bottom: 1px solid var(--mono-pale-gray);
 }
 
 .info-table th {
-    background: var(--light-gray);
+    background: var(--mono-off-white);
     font-weight: 600;
-    color: var(--dark-gray);
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    width: 40%;
+    color: var(--mono-dark-gray);
+    font-size: var(--text-sm);
+    width: 35%;
 }
 
 .info-table td {
     font-weight: 500;
-    color: var(--charcoal);
-    font-size: 1rem;
+    color: var(--mono-charcoal);
+}
+
+.info-table tr:hover {
+    background: var(--mono-off-white);
 }
 
 .info-table tr:last-child th,
@@ -443,350 +529,380 @@ body {
     border-bottom: none;
 }
 
-.info-table .highlight {
-    font-weight: 700;
-    color: var(--ink-black);
+/* Sidebar - Vintage photo frame style */
+.sidebar {
+    position: sticky;
+    top: var(--space-8);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
 }
 
-.info-table .urgent {
-    color: #dc3545;
-    font-weight: 700;
-}
-
-/* Sidebar - Photo caption style */
-.content-sidebar {
-    position: relative;
-}
-
-.sidebar-section {
-    margin-bottom: 3rem;
-    padding: 2rem;
-    background: var(--light-gray);
-    border: 1px solid var(--mid-gray);
-    position: relative;
+.sidebar-card {
+    background: var(--mono-white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-medium);
+    border: 1px solid var(--mono-pale-gray);
 }
 
 .sidebar-title {
-    font-family: var(--font-display);
-    font-size: 1.25rem;
+    font-size: var(--text-lg);
     font-weight: 700;
-    color: var(--ink-black);
-    margin-bottom: 1.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 1rem;
+    color: var(--mono-black);
+    margin-bottom: var(--space-5);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
 }
 
-/* Action buttons - Minimalist style */
+/* Action buttons - Film camera style */
 .action-buttons {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--space-3);
 }
 
-.action-btn {
+.btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    background: var(--ink-black);
-    color: var(--pure-white);
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-6);
+    border-radius: var(--radius-base);
     text-decoration: none;
     font-weight: 600;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    transition: all 0.3s ease;
+    font-size: var(--text-sm);
+    transition: all var(--transition-base);
     border: none;
     cursor: pointer;
+    position: relative;
+    overflow: hidden;
 }
 
-.action-btn:hover {
-    background: var(--charcoal);
-    transform: translateY(-2px);
+.btn-primary {
+    background: var(--mono-black);
+    color: var(--mono-white);
+    box-shadow: var(--shadow-soft);
+}
+
+.btn-primary:hover {
+    background: var(--mono-charcoal);
+    transform: translateY(-1px);
     box-shadow: var(--shadow-medium);
 }
 
-.action-btn.secondary {
+.btn-secondary {
     background: transparent;
-    color: var(--ink-black);
-    border: 2px solid var(--ink-black);
+    color: var(--mono-charcoal);
+    border: 2px solid var(--mono-pale-gray);
 }
 
-.action-btn.secondary:hover {
-    background: var(--ink-black);
-    color: var(--pure-white);
+.btn-secondary:hover {
+    border-color: var(--mono-black);
+    background: var(--mono-off-white);
 }
 
-/* Tags and taxonomies - Film strip style */
-.tags-section {
-    margin-top: 2rem;
-}
-
-.tags-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1rem;
-}
-
-.tag-item {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    background: var(--pure-white);
-    border: 1px solid var(--mid-gray);
-    color: var(--charcoal);
-    text-decoration: none;
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: all 0.3s ease;
-}
-
-.tag-item:hover {
-    background: var(--ink-black);
-    color: var(--pure-white);
-    border-color: var(--ink-black);
-}
-
-/* Stats display - Dashboard style */
+/* Statistics - Darkroom timer style */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
-    margin-top: 1.5rem;
+    gap: var(--space-4);
 }
 
 .stat-item {
     text-align: center;
-    padding: 1.5rem 1rem;
-    background: var(--pure-white);
-    border: 1px solid var(--mid-gray);
+    padding: var(--space-4);
+    background: var(--mono-off-white);
+    border-radius: var(--radius-base);
+    border: 1px solid var(--mono-pale-gray);
+    transition: transform var(--transition-base);
+}
+
+.stat-item:hover {
+    transform: scale(1.02);
 }
 
 .stat-number {
+    font-size: var(--text-2xl);
+    font-weight: 800;
+    color: var(--mono-black);
     display: block;
-    font-family: var(--font-display);
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--ink-black);
-    margin-bottom: 0.5rem;
+    line-height: 1;
 }
 
 .stat-label {
-    font-size: 0.875rem;
-    color: var(--dark-gray);
+    font-size: var(--text-xs);
+    color: var(--mono-mid-gray);
+    margin-top: var(--space-1);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
-/* Contact info - Business card style */
-.contact-card {
-    background: var(--paper-white);
-    border: 1px solid var(--mid-gray);
-    padding: 2rem;
-    margin: 2rem 0;
+/* Difficulty indicator - Film grain effect */
+.difficulty-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.difficulty-dots {
+    display: flex;
+    gap: var(--space-1);
+}
+
+.difficulty-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--mono-pale-gray);
+}
+
+.difficulty-dot.filled {
+    background: var(--mono-black);
+}
+
+/* Tags - Contact sheet style */
+.tags-section {
+    margin-top: var(--space-5);
+}
+
+.tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--mono-off-white);
+    color: var(--mono-dark-gray);
+    border: 1px solid var(--mono-pale-gray);
+    border-radius: var(--radius-base);
+    font-size: var(--text-xs);
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    font-weight: 500;
+}
+
+.tag:hover {
+    background: var(--mono-black);
+    color: var(--mono-white);
+    transform: translateY(-1px);
+}
+
+/* Progress bar - Film loading effect */
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--mono-pale-gray);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    margin-top: var(--space-2);
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--mono-black), var(--mono-dark-gray));
+    border-radius: var(--radius-sm);
+    transition: width 0.8s ease-out;
     position: relative;
 }
 
-.contact-card::before {
+.progress-fill::after {
     content: '';
     position: absolute;
-    top: 1rem;
-    left: 1rem;
-    width: 0.5rem;
-    height: 0.5rem;
-    background: var(--ink-black);
-    border-radius: 50%;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: shimmer 2s infinite;
 }
 
-/* Responsive design */
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
+    .grant-stylish {
+        padding: var(--space-6) var(--space-4);
+    }
+    
     .grant-hero {
-        padding: 3rem 1.5rem;
+        margin: 0 calc(-1 * var(--space-4)) var(--space-8);
+        padding: var(--space-12) var(--space-4);
     }
     
     .grant-title {
-        font-size: 2rem;
+        font-size: var(--text-2xl);
     }
     
-    .grant-summary {
-        font-size: 1.125rem;
-    }
-    
-    .grant-metrics {
+    .key-info-grid {
         grid-template-columns: 1fr;
-        gap: 1.5rem;
-        padding: 1.5rem;
+        gap: var(--space-4);
     }
     
-    .grant-content {
-        padding: 2rem 1.5rem;
+    .stats-grid {
+        grid-template-columns: 1fr;
     }
     
-    .info-table th,
-    .info-table td {
-        padding: 1rem;
-    }
-    
-    .info-table th {
-        width: auto;
-        display: block;
-        background: var(--charcoal);
-        color: var(--pure-white);
-        font-size: 0.75rem;
-    }
-    
-    .info-table td {
-        display: block;
-        padding: 1rem 1rem 1.5rem 1rem;
-        border-bottom: 2px solid var(--mid-gray);
+    .sidebar {
+        position: static;
     }
 }
 
-/* Print styles - Clean newspaper style */
+/* Print styles - High contrast */
 @media print {
-    .grant-monochrome {
+    .grant-stylish {
+        background: white;
+        color: black;
         box-shadow: none;
     }
     
-    .content-sidebar,
-    .action-buttons {
+    .sidebar {
         display: none;
     }
     
-    .grant-content {
+    .content-layout {
         grid-template-columns: 1fr;
     }
     
-    .grant-hero {
-        background: transparent;
-        border-bottom: 2px solid var(--ink-black);
+    .btn {
+        display: none;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --mono-black: #ffffff;
+        --mono-white: #000000;
+        --mono-charcoal: #e5e5e5;
+        --mono-off-white: #0a0a0a;
+        --mono-pale-gray: #2d2d2d;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .info-card {
+        border-width: 3px;
     }
     
-    .section-title::after {
-        background: var(--ink-black);
+    .btn {
+        border-width: 2px;
     }
 }
 
-/* Animation for smooth loading */
-.grant-monochrome {
-    animation: fadeInUp 0.6s ease-out;
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Subtle hover effects */
-.content-section {
-    transition: all 0.3s ease;
-}
-
-.content-section:hover {
-    transform: translateY(-2px);
-}
-
-.sidebar-section {
-    transition: all 0.3s ease;
-}
-
-.sidebar-section:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-soft);
 }
 </style>
 
-<main class="grant-monochrome">
-    <!-- Hero Section - Photo-style header -->
-    <section class="grant-hero">
-        <div class="grant-hero-content">
-            <!-- Status indicator -->
-            <div class="grant-status <?php echo $status_data['class']; ?> <?php echo $deadline_class; ?>">
-                <?php echo $status_data['label']; ?>
-                <?php if ($days_remaining > 0 && $days_remaining <= 30): ?>
-                    - <?php echo $days_remaining; ?>日残り
-                <?php endif; ?>
+<main class="grant-stylish">
+    <!-- Hero Section -->
+    <header class="grant-hero">
+        <div class="status-badge <?php echo $status_data['class']; ?> <?php echo $deadline_class; ?>">
+            <?php echo $status_data['label']; ?>
+            <?php if ($days_remaining > 0 && $days_remaining <= 30): ?>
+                · <?php echo $days_remaining; ?>日
+            <?php endif; ?>
+        </div>
+        
+        <h1 class="grant-title"><?php the_title(); ?></h1>
+        
+        <?php if ($grant_data['ai_summary']): ?>
+        <p class="grant-subtitle"><?php echo esc_html(wp_trim_words($grant_data['ai_summary'], 30, '...')); ?></p>
+        <?php endif; ?>
+        
+        <!-- Key Information Grid -->
+        <div class="key-info-grid">
+            <?php if ($formatted_amount): ?>
+            <div class="info-card">
+                <div class="info-icon">¥</div>
+                <div class="info-label">最大助成額</div>
+                <div class="info-value highlight"><?php echo esc_html($formatted_amount); ?></div>
             </div>
-            
-            <!-- Main title -->
-            <h1 class="grant-title"><?php the_title(); ?></h1>
-            
-            <!-- AI Summary -->
-            <?php if ($grant_data['ai_summary']): ?>
-            <p class="grant-summary"><?php echo esc_html($grant_data['ai_summary']); ?></p>
             <?php endif; ?>
             
-            <!-- Key metrics grid -->
-            <div class="grant-metrics">
-                <?php if ($formatted_amount): ?>
-                <div class="metric-item">
-                    <span class="metric-label">最大助成額</span>
-                    <span class="metric-value highlight"><?php echo esc_html($formatted_amount); ?></span>
+            <?php if ($deadline_info): ?>
+            <div class="info-card">
+                <div class="info-icon">📅</div>
+                <div class="info-label">申請締切</div>
+                <div class="info-value <?php echo $deadline_class === 'urgent' ? 'urgent' : ''; ?>">
+                    <?php echo esc_html($deadline_info); ?>
                 </div>
-                <?php endif; ?>
-                
-                <?php if ($grant_data['subsidy_rate']): ?>
-                <div class="metric-item">
-                    <span class="metric-label">補助率</span>
-                    <span class="metric-value"><?php echo esc_html($grant_data['subsidy_rate']); ?></span>
-                </div>
-                <?php endif; ?>
-                
-                <?php if ($deadline_info): ?>
-                <div class="metric-item">
-                    <span class="metric-label">申請締切</span>
-                    <span class="metric-value <?php echo $deadline_class === 'urgent' ? 'urgent' : ''; ?>">
-                        <?php echo esc_html($deadline_info); ?>
-                    </span>
-                </div>
-                <?php endif; ?>
-                
-                <?php if ($grant_data['grant_success_rate'] > 0): ?>
-                <div class="metric-item">
-                    <span class="metric-label">採択率</span>
-                    <span class="metric-value"><?php echo $grant_data['grant_success_rate']; ?>%</span>
-                </div>
-                <?php endif; ?>
             </div>
+            <?php endif; ?>
+            
+            <?php if ($grant_data['grant_success_rate'] > 0): ?>
+            <div class="info-card">
+                <div class="info-icon">📊</div>
+                <div class="info-label">採択率</div>
+                <div class="info-value"><?php echo $grant_data['grant_success_rate']; ?>%</div>
+            </div>
+            <?php endif; ?>
+            
+            <?php if ($grant_data['organization']): ?>
+            <div class="info-card">
+                <div class="info-icon">🏢</div>
+                <div class="info-label">実施機関</div>
+                <div class="info-value" style="font-size: var(--text-lg);"><?php echo esc_html($grant_data['organization']); ?></div>
+            </div>
+            <?php endif; ?>
         </div>
-    </section>
+    </header>
     
-    <!-- Main content grid -->
-    <div class="grant-content">
-        <!-- Main content area -->
+    <!-- Main Content Layout -->
+    <div class="content-layout">
+        <!-- Main Content -->
         <div class="content-main">
-            <!-- Main content -->
+            <!-- Main Content Section -->
             <section class="content-section">
-                <h2 class="section-title">詳細情報</h2>
+                <header class="section-header">
+                    <div class="section-icon">📄</div>
+                    <h2 class="section-title">詳細情報</h2>
+                </header>
                 <div class="section-content">
                     <?php the_content(); ?>
                 </div>
             </section>
             
-            <!-- Information table -->
+            <!-- Detailed Information Table -->
             <section class="content-section">
-                <h2 class="section-title">基本情報</h2>
+                <header class="section-header">
+                    <div class="section-icon">📋</div>
+                    <h2 class="section-title">助成金詳細</h2>
+                </header>
                 <div class="section-content">
                     <table class="info-table">
                         <?php if ($grant_data['organization']): ?>
                         <tr>
                             <th>実施機関</th>
-                            <td><?php echo esc_html($grant_data['organization']); ?></td>
+                            <td>
+                                <?php echo esc_html($grant_data['organization']); ?>
+                                <?php if ($grant_data['organization_type']): ?>
+                                    <br><small style="color: var(--mono-mid-gray);"><?php echo $org_type_labels[$grant_data['organization_type']] ?? $grant_data['organization_type']; ?></small>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                         <?php endif; ?>
                         
                         <?php if ($formatted_amount): ?>
                         <tr>
                             <th>助成額</th>
-                            <td class="highlight"><?php echo esc_html($formatted_amount); ?></td>
+                            <td><strong><?php echo esc_html($formatted_amount); ?></strong></td>
                         </tr>
                         <?php endif; ?>
                         
@@ -800,62 +916,89 @@ body {
                         <?php if ($deadline_info): ?>
                         <tr>
                             <th>申請締切</th>
-                            <td class="<?php echo $deadline_class === 'urgent' ? 'urgent' : ''; ?>">
-                                <?php echo esc_html($deadline_info); ?>
-                            </td>
+                            <td><?php echo esc_html($deadline_info); ?></td>
                         </tr>
                         <?php endif; ?>
                         
                         <?php if ($grant_data['application_method']): ?>
                         <tr>
                             <th>申請方法</th>
+                            <td><?php echo $method_labels[$grant_data['application_method']] ?? esc_html($grant_data['application_method']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        
+                        <?php if ($difficulty !== 'normal'): ?>
+                        <tr>
+                            <th>申請難易度</th>
                             <td>
-                                <?php
-                                $method_labels = array(
-                                    'online' => 'オンライン申請',
-                                    'mail' => '郵送申請',
-                                    'visit' => '窓口申請',
-                                    'mixed' => 'オンライン・郵送併用'
-                                );
-                                echo $method_labels[$grant_data['application_method']] ?? esc_html($grant_data['application_method']);
-                                ?>
+                                <div class="difficulty-indicator">
+                                    <?php echo $difficulty_data['label']; ?>
+                                    <div class="difficulty-dots">
+                                        <?php for ($i = 1; $i <= 4; $i++): ?>
+                                            <div class="difficulty-dot <?php echo $i <= $difficulty_data['dots'] ? 'filled' : ''; ?>"></div>
+                                        <?php endfor; ?>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         <?php endif; ?>
                         
-                        <?php if ($grant_data['grant_success_rate'] > 0): ?>
                         <tr>
-                            <th>採択率</th>
-                            <td class="highlight"><?php echo $grant_data['grant_success_rate']; ?>%</td>
+                            <th>閲覧数</th>
+                            <td><?php echo number_format($grant_data['views_count']); ?> 回</td>
                         </tr>
-                        <?php endif; ?>
-                        
-                        <?php if ($grant_data['grant_difficulty'] !== 'normal'): ?>
-                        <tr>
-                            <th>申請難易度</th>
-                            <td><?php echo $difficulty_data['label']; ?></td>
-                        </tr>
-                        <?php endif; ?>
                     </table>
                 </div>
             </section>
             
             <?php if ($grant_data['grant_target']): ?>
-            <!-- Target details -->
+            <!-- Target Details -->
             <section class="content-section">
-                <h2 class="section-title">対象者・対象事業</h2>
+                <header class="section-header">
+                    <div class="section-icon">🎯</div>
+                    <h2 class="section-title">対象者・対象事業</h2>
+                </header>
                 <div class="section-content">
                     <?php echo wp_kses_post($grant_data['grant_target']); ?>
                 </div>
             </section>
             <?php endif; ?>
             
-            <?php if ($grant_data['contact_info']): ?>
-            <!-- Contact information -->
+            <?php if ($grant_data['eligible_expenses']): ?>
+            <!-- Eligible Expenses -->
             <section class="content-section">
-                <h2 class="section-title">お問い合わせ先</h2>
+                <header class="section-header">
+                    <div class="section-icon">💰</div>
+                    <h2 class="section-title">対象経費</h2>
+                </header>
                 <div class="section-content">
-                    <div class="contact-card">
+                    <?php echo wp_kses_post($grant_data['eligible_expenses']); ?>
+                </div>
+            </section>
+            <?php endif; ?>
+            
+            <?php if ($grant_data['required_documents']): ?>
+            <!-- Required Documents -->
+            <section class="content-section">
+                <header class="section-header">
+                    <div class="section-icon">📝</div>
+                    <h2 class="section-title">必要書類</h2>
+                </header>
+                <div class="section-content">
+                    <?php echo wp_kses_post($grant_data['required_documents']); ?>
+                </div>
+            </section>
+            <?php endif; ?>
+            
+            <?php if ($grant_data['contact_info']): ?>
+            <!-- Contact Information -->
+            <section class="content-section">
+                <header class="section-header">
+                    <div class="section-icon">📞</div>
+                    <h2 class="section-title">お問い合わせ先</h2>
+                </header>
+                <div class="section-content">
+                    <div style="background: var(--mono-off-white); padding: var(--space-5); border-radius: var(--radius-base); border-left: 4px solid var(--mono-black);">
                         <?php echo nl2br(esc_html($grant_data['contact_info'])); ?>
                     </div>
                 </div>
@@ -864,39 +1007,46 @@ body {
         </div>
         
         <!-- Sidebar -->
-        <aside class="content-sidebar">
-            <!-- Action buttons -->
-            <div class="sidebar-section">
-                <h3 class="sidebar-title">申請・詳細</h3>
+        <aside class="sidebar">
+            <!-- Action Buttons -->
+            <div class="sidebar-card">
+                <h3 class="sidebar-title">
+                    🚀 アクション
+                </h3>
                 <div class="action-buttons">
                     <?php if ($grant_data['official_url']): ?>
-                    <a href="<?php echo esc_url($grant_data['official_url']); ?>" class="action-btn" target="_blank" rel="noopener">
-                        公式サイトで申請
+                    <a href="<?php echo esc_url($grant_data['official_url']); ?>" class="btn btn-primary" target="_blank" rel="noopener">
+                        🔗 公式サイトで申請
                     </a>
                     <?php endif; ?>
                     
-                    <button class="action-btn secondary" onclick="toggleBookmark(<?php echo $post_id; ?>)">
-                        ブックマーク
+                    <button class="btn btn-secondary" onclick="toggleFavorite(<?php echo $post_id; ?>)">
+                        ❤️ お気に入りに追加
                     </button>
                     
-                    <button class="action-btn secondary" onclick="shareGrant()">
-                        シェア
+                    <button class="btn btn-secondary" onclick="shareGrant()">
+                        📤 この助成金をシェア
                     </button>
                     
-                    <button class="action-btn secondary" onclick="window.print()">
-                        印刷
+                    <button class="btn btn-secondary" onclick="window.print()">
+                        🖨️ 印刷用ページ
                     </button>
                 </div>
             </div>
             
             <!-- Statistics -->
-            <div class="sidebar-section">
-                <h3 class="sidebar-title">統計情報</h3>
+            <div class="sidebar-card">
+                <h3 class="sidebar-title">
+                    📊 統計情報
+                </h3>
                 <div class="stats-grid">
                     <?php if ($grant_data['grant_success_rate'] > 0): ?>
                     <div class="stat-item">
                         <span class="stat-number"><?php echo $grant_data['grant_success_rate']; ?>%</span>
                         <span class="stat-label">採択率</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: <?php echo $grant_data['grant_success_rate']; ?>%"></div>
+                        </div>
                     </div>
                     <?php endif; ?>
                     
@@ -913,57 +1063,70 @@ body {
                     <?php endif; ?>
                     
                     <div class="stat-item">
-                        <span class="stat-number"><?php echo $difficulty_data['label']; ?></span>
-                        <span class="stat-label">申請難易度</span>
+                        <span class="stat-number"><?php echo $difficulty_data['dots']; ?>/4</span>
+                        <span class="stat-label">難易度</span>
                     </div>
                 </div>
             </div>
             
-            <!-- Tags and categories -->
-            <?php if ($taxonomies['categories'] || $taxonomies['prefectures'] || $taxonomies['municipalities'] || $taxonomies['tags']): ?>
-            <div class="sidebar-section">
-                <h3 class="sidebar-title">関連タグ</h3>
+            <!-- Tags and Taxonomies -->
+            <?php if ($taxonomies['categories'] || $taxonomies['prefectures'] || $taxonomies['tags']): ?>
+            <div class="sidebar-card">
+                <h3 class="sidebar-title">
+                    🏷️ 関連分類
+                </h3>
+                
+                <?php if ($taxonomies['categories'] && !is_wp_error($taxonomies['categories'])): ?>
                 <div class="tags-section">
-                    <?php if ($taxonomies['categories'] && !is_wp_error($taxonomies['categories'])): ?>
-                        <div class="tags-grid">
-                            <?php foreach ($taxonomies['categories'] as $category): ?>
-                            <a href="<?php echo get_term_link($category); ?>" class="tag-item">
-                                <?php echo esc_html($category->name); ?>
-                            </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <?php if ($taxonomies['prefectures'] && !is_wp_error($taxonomies['prefectures'])): ?>
-                        <div class="tags-grid" style="margin-top: 1rem;">
-                            <?php foreach ($taxonomies['prefectures'] as $prefecture): ?>
-                            <a href="<?php echo get_term_link($prefecture); ?>" class="tag-item">
-                                📍 <?php echo esc_html($prefecture->name); ?>
-                            </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <?php if ($taxonomies['municipalities'] && !is_wp_error($taxonomies['municipalities'])): ?>
-                        <div class="tags-grid" style="margin-top: 1rem;">
-                            <?php foreach ($taxonomies['municipalities'] as $municipality): ?>
-                            <a href="<?php echo get_term_link($municipality); ?>" class="tag-item">
-                                🏘️ <?php echo esc_html($municipality->name); ?>
-                            </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <?php if ($taxonomies['tags'] && !is_wp_error($taxonomies['tags'])): ?>
-                        <div class="tags-grid" style="margin-top: 1rem;">
-                            <?php foreach ($taxonomies['tags'] as $tag): ?>
-                            <a href="<?php echo get_term_link($tag); ?>" class="tag-item">
-                                # <?php echo esc_html($tag->name); ?>
-                            </a>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
+                    <h4 style="margin-bottom: var(--space-3); color: var(--mono-mid-gray); font-size: var(--text-sm);">カテゴリー</h4>
+                    <div class="tags-list">
+                        <?php foreach ($taxonomies['categories'] as $category): ?>
+                        <a href="<?php echo get_term_link($category); ?>" class="tag">
+                            🏷️ <?php echo esc_html($category->name); ?>
+                        </a>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
+                <?php endif; ?>
+                
+                <?php if ($taxonomies['prefectures'] && !is_wp_error($taxonomies['prefectures'])): ?>
+                <div class="tags-section">
+                    <h4 style="margin: var(--space-4) 0 var(--space-3) 0; color: var(--mono-mid-gray); font-size: var(--text-sm);">対象地域</h4>
+                    <div class="tags-list">
+                        <?php foreach ($taxonomies['prefectures'] as $prefecture): ?>
+                        <a href="<?php echo get_term_link($prefecture); ?>" class="tag">
+                            📍 <?php echo esc_html($prefecture->name); ?>
+                        </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <?php if ($taxonomies['municipalities'] && !is_wp_error($taxonomies['municipalities'])): ?>
+                <div class="tags-section">
+                    <h4 style="margin: var(--space-4) 0 var(--space-3) 0; color: var(--mono-mid-gray); font-size: var(--text-sm);">市町村</h4>
+                    <div class="tags-list">
+                        <?php foreach ($taxonomies['municipalities'] as $municipality): ?>
+                        <a href="<?php echo get_term_link($municipality); ?>" class="tag">
+                            🏘️ <?php echo esc_html($municipality->name); ?>
+                        </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <?php if ($taxonomies['tags'] && !is_wp_error($taxonomies['tags'])): ?>
+                <div class="tags-section">
+                    <h4 style="margin: var(--space-4) 0 var(--space-3) 0; color: var(--mono-mid-gray); font-size: var(--text-sm);">タグ</h4>
+                    <div class="tags-list">
+                        <?php foreach ($taxonomies['tags'] as $tag): ?>
+                        <a href="<?php echo get_term_link($tag); ?>" class="tag">
+                            # <?php echo esc_html($tag->name); ?>
+                        </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
         </aside>
@@ -971,21 +1134,20 @@ body {
 </main>
 
 <script>
-// Minimal, elegant functionality
-function toggleBookmark(postId) {
-    const button = event.target;
-    const isBookmarked = button.textContent.includes('済み');
+// Enhanced functionality for stylish design
+function toggleFavorite(postId) {
+    const button = event.target.closest('.btn');
     
-    if (isBookmarked) {
-        button.textContent = 'ブックマーク';
-        button.classList.remove('bookmarked');
-    } else {
-        button.textContent = 'ブックマーク済み';
-        button.classList.add('bookmarked');
-    }
+    // Visual feedback
+    button.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+        button.style.transform = '';
+        button.innerHTML = '💖 お気に入り登録済み';
+        button.style.background = 'var(--accent-danger)';
+        button.style.color = 'white';
+    }, 100);
     
-    // Add your bookmark logic here
-    console.log('Toggle bookmark for post:', postId);
+    console.log('Toggle favorite for post:', postId);
 }
 
 function shareGrant() {
@@ -998,34 +1160,79 @@ function shareGrant() {
             title: title,
             text: text,
             url: url
-        }).catch(err => console.log('Share error:', err));
+        }).catch(err => console.log('Error sharing:', err));
     } else {
         navigator.clipboard.writeText(url).then(() => {
-            alert('URLをコピーしました');
+            // Visual feedback
+            const button = event.target.closest('.btn');
+            const originalText = button.innerHTML;
+            button.innerHTML = '✅ URLをコピーしました！';
+            button.style.background = 'var(--accent-success)';
+            button.style.color = 'white';
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.style.background = '';
+                button.style.color = '';
+            }, 2000);
+        }).catch(err => {
+            alert('URLのコピーに失敗しました');
         });
     }
 }
 
-// Initialize page
+// Initialize page functionality
 document.addEventListener('DOMContentLoaded', function() {
-    // Smooth reveal animation
-    const sections = document.querySelectorAll('.content-section, .sidebar-section');
-    
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.style.opacity = '1';
-                entry.target.style.transform = 'translateY(0)';
-            }
+    // Animate progress bars
+    setTimeout(() => {
+        document.querySelectorAll('.progress-fill').forEach((bar, index) => {
+            const width = bar.style.width;
+            bar.style.width = '0';
+            setTimeout(() => {
+                bar.style.width = width;
+            }, 300 + (index * 100));
         });
-    });
+    }, 500);
     
-    sections.forEach(section => {
-        section.style.opacity = '0';
-        section.style.transform = 'translateY(20px)';
-        section.style.transition = 'all 0.6s ease';
-        observer.observe(section);
-    });
+    // Add intersection observer for animations
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.animation = 'fadeInUp 0.6s ease-out forwards';
+                }
+            });
+        }, {
+            threshold: 0.1
+        });
+        
+        document.querySelectorAll('.content-section, .sidebar-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            observer.observe(el);
+        });
+    }
+    
+    // Add CSS animation keyframes
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+});
+
+// Enhanced print functionality
+window.addEventListener('beforeprint', function() {
+    document.body.style.background = 'white';
+});
+
+window.addEventListener('afterprint', function() {
+    document.body.style.background = '';
 });
 </script>
 
