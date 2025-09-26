@@ -332,11 +332,13 @@ function setupHeaders(sheet) {
     '申請方法',              // O列
     '問い合わせ先',          // P列
     '公式URL',               // Q列
-    '地域制限',              // R列 (旧U列)
-    '申請ステータス',        // S列 (旧V列)
-    'カテゴリ',              // T列 (旧W列)
-    'タグ',                  // U列 (旧X列)
-    'シート更新日'           // V列 (旧Y列)
+    '地域制限',              // R列
+    '申請ステータス',        // S列
+    '都道府県',              // T列 ★完全連携: タクソノミーデータ
+    '市町村',                // U列 ★完全連携: タクソノミーデータ
+    'カテゴリ',              // V列 ★完全連携: タクソノミーデータ
+    'タグ',                  // W列 ★完全連携: タクソノミーデータ
+    'シート更新日'           // X列
   ];
   
   // ヘッダー行を設定
@@ -424,11 +426,13 @@ function requestGrantPostsFromWordPress() {
         'online',  // 申請方法
         'contact@example.com',  // 問い合わせ先
         'https://example.com',  // 公式URL
-        'prefecture_only',  // 地域制限 (新R列)
-        'open',  // 申請ステータス (新S列)
-        'ビジネス支援',  // カテゴリ (新T列)
-        'スタートアップ, 中小企業',  // タグ (新U列)
-        new Date().toISOString().substring(0, 19).replace('T', ' ')  // シート更新日 (新V列)
+        'prefecture_only',  // 地域制限 (R列)
+        'open',  // 申請ステータス (S列)
+        '東京都',  // 都道府県 (T列) ★完全連携
+        '新宿区, 渋谷区',  // 市町村 (U列) ★完全連携
+        'ビジネス支援',  // カテゴリ (V列) ★完全連携
+        'スタートアップ, 中小企業',  // タグ (W列) ★完全連携
+        new Date().toISOString().substring(0, 19).replace('T', ' ')  // シート更新日 (X列)
       ]
     ];
   }
@@ -1360,11 +1364,13 @@ function convertJgrantsToWordPressFormat(jgrantsData) {
     'online', // 申請方法（Jグランツは基本オンライン）
     grant.contact_information || 'Jグランツサイトを確認', // 問い合わせ先
     `https://www.jgrants-portal.go.jp/grants/detail/${grant.id}`, // 公式URL
-    determineAreaRestriction(grant.target_area_search), // 地域制限 (新R列)
-    determineApplicationStatus(grant.acceptance_start_datetime, grant.acceptance_end_datetime), // 申請ステータス (新S列)
-    '政府系助成金, Jグランツ', // カテゴリ (新T列)
-    extractTags(grant), // タグ (新U列)
-    new Date().toISOString().substring(0, 19).replace('T', ' ') // シート更新日 (新V列)
+    determineAreaRestriction(grant.target_area_search), // 地域制限 (R列)
+    determineApplicationStatus(grant.acceptance_start_datetime, grant.acceptance_end_datetime), // 申請ステータス (S列)
+    extractPrefectureFromArea(grant.target_area_search), // 都道府県 (T列) ★完全連携
+    extractMunicipalityFromArea(grant.target_area_detail), // 市町村 (U列) ★完全連携
+    '政府系助成金, Jグランツ', // カテゴリ (V列) ★完全連携
+    extractTags(grant), // タグ (W列) ★完全連携
+    new Date().toISOString().substring(0, 19).replace('T', ' ') // シート更新日 (X列)
   ]);
 }
 
@@ -1411,7 +1417,44 @@ function extractDateFromString(dateString) {
   }
 }
 
-// Prefecture-related functions removed - taxonomy data is now managed through WordPress metaboxes
+/**
+ * Jグランツの地域情報から都道府県名を抽出（完全連携用）
+ */
+function extractPrefectureFromArea(areaString) {
+  if (!areaString) return '全国';
+  
+  const prefectures = [
+    '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+    '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+    '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
+    '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
+    '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+    '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+    '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
+  ];
+  
+  for (const pref of prefectures) {
+    if (areaString.includes(pref)) {
+      return pref;
+    }
+  }
+  
+  return areaString.includes('全国') ? '全国' : '全国';
+}
+
+/**
+ * Jグランツの詳細地域から市町村を抽出（完全連携用）
+ */
+function extractMunicipalityFromArea(areaDetail) {
+  if (!areaDetail) return '全域';
+  
+  // 市町村を含む場合はそのまま返す
+  if (areaDetail.includes('市') || areaDetail.includes('町') || areaDetail.includes('村') || areaDetail.includes('区')) {
+    return areaDetail;
+  }
+  
+  return '全域';
+}
 
 /**
  * 地域制限を決定
@@ -1500,7 +1543,7 @@ function setupFieldValidation() {
       'mixed'         // オンライン・郵送併用
     ]);
     
-    // R列: 地域制限 (旧U列から移動)
+    // R列: 地域制限
     setupDropdownValidation(sheet, 'R:R', [
       'nationwide',        // 全国対象
       'prefecture_only',   // 都道府県内限定
@@ -1509,13 +1552,19 @@ function setupFieldValidation() {
       'specific_area'      // 特定地域限定
     ]);
     
-    // S列: 申請ステータス (旧V列から移動)
+    // S列: 申請ステータス
     setupDropdownValidation(sheet, 'S:S', [
       'open',             // 募集中
       'upcoming',         // 募集予定
       'closed',           // 募集終了
       'suspended'         // 一時停止
     ]);
+    
+    // T列: 都道府県 (自由入力 - 完全連携対応)
+    // ★バリデーションなし：どんな都道府県名でも入力可能
+    
+    // U列: 市町村 (自由入力 - 完全連携対応)
+    // ★バリデーションなし：カンマ区切りで複数の市町村名を入力可能
     
     console.log('Field validation setup completed successfully');
     
@@ -1524,6 +1573,13 @@ function setupFieldValidation() {
     validationColumns.forEach(column => {
       const range = sheet.getRange(`${column}1:${column}1000`);
       range.setBackground('#f0f8ff'); // 薄い青色で選択肢フィールドを区別
+    });
+    
+    // 完全連携フィールドを緑色で区別（タクソノミー連携フィールド）
+    const taxonomyColumns = ['T', 'U', 'V', 'W']; // 都道府県、市町村、カテゴリ、タグ
+    taxonomyColumns.forEach(column => {
+      const range = sheet.getRange(`${column}1:${column}1000`);
+      range.setBackground('#e8f5e8'); // 薄い緑色でタクソノミーフィールドを区別
     });
     
     return {
@@ -1622,7 +1678,13 @@ function showUsageGuide() {
 • R列: 地域制限 (nationwide/prefecture_only等)
 • S列: 申請ステータス (open/closed/upcoming/suspended)
 
-【注意】都道府県・市町村情報はWordPressのタクソノミーで管理されます
+【完全連携フィールド（背景が緑色）】
+• T列: 都道府県 (例: 東京都、大阪府)
+• U列: 市町村 (例: 新宿区, 渋谷区 - カンマ区切りで複数可)
+• V列: カテゴリ (例: ビジネス支援, IT関連 - カンマ区切りで複数可)  
+• W列: タグ (例: スタートアップ, 中小企業 - カンマ区切りで複数可)
+
+★完全連携対応：WordPress投稿で入力可能な全項目がスプレッドシートでも編集可能になりました
 
 【初回設定】
 1. 🛠️ 初期設定（トリガー設定）を実行

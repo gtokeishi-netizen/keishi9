@@ -518,15 +518,23 @@ class GoogleSheetsSync {
             $application_status = get_field('application_status', $post_id);
             $row[] = (string)$application_status;
             
-            // T列: カテゴリ (タクソノミー)
+            // T列: 都道府県 (タクソノミー) ★完全連携
+            $prefectures = wp_get_post_terms($post_id, 'grant_prefecture', array('fields' => 'names'));
+            $row[] = (is_array($prefectures) && !is_wp_error($prefectures)) ? implode(', ', $prefectures) : '';
+            
+            // U列: 市町村 (タクソノミー) ★完全連携
+            $municipalities = wp_get_post_terms($post_id, 'grant_municipality', array('fields' => 'names'));
+            $row[] = (is_array($municipalities) && !is_wp_error($municipalities)) ? implode(', ', $municipalities) : '';
+            
+            // V列: カテゴリ (タクソノミー) ★完全連携
             $categories = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
             $row[] = (is_array($categories) && !is_wp_error($categories)) ? implode(', ', $categories) : '';
             
-            // U列: タグ (タクソノミー)
+            // W列: タグ (タクソノミー) ★完全連携
             $tags = wp_get_post_terms($post_id, 'grant_tag', array('fields' => 'names'));
             $row[] = (is_array($tags) && !is_wp_error($tags)) ? implode(', ', $tags) : '';
             
-            // V列: シート更新日
+            // X列: シート更新日
             $row[] = current_time('mysql');
             
             gi_log_error('Post converted to sheet row successfully', array('post_id' => $post_id, 'columns' => count($row)));
@@ -568,16 +576,18 @@ class GoogleSheetsSync {
                 '申請方法 (online/mail/visit/mixed)',     // O列 - 申請方法
                 '問い合わせ先',                          // P列 - 連絡先情報
                 '公式URL',                               // Q列 - 公式サイトURL
-                '地域制限 (nationwide/prefecture_only/municipality_only/region_group/specific_area)', // R列 - 地域制限タイプ (旧U列)
-                '申請ステータス (open/upcoming/closed/suspended)', // S列 - 募集状況 (旧V列)
-                'カテゴリ',                              // T列 - 分類カテゴリ (旧W列)
-                'タグ',                                  // U列 - タグ (旧X列)
-                'シート更新日 (自動入力)'                // V列 - 最終同期日時 (旧Y列)
+                '地域制限 (nationwide/prefecture_only/municipality_only/region_group/specific_area)', // R列 - 地域制限タイプ
+                '申請ステータス (open/upcoming/closed/suspended)', // S列 - 募集状況
+                '都道府県 (例: 東京都)',                  // T列 - 都道府県名 ★完全連携
+                '市町村 (例: 新宿区,渋谷区)',            // U列 - 市町村名 ★完全連携
+                'カテゴリ (例: ビジネス支援,IT関連)',     // V列 - 分類カテゴリ ★完全連携
+                'タグ (例: スタートアップ,中小企業)',     // W列 - タグ ★完全連携
+                'シート更新日 (自動入力)'                // X列 - 最終同期日時
             );
             
             gi_log_error('Headers array created', array('count' => count($headers)));
             
-            $range = $this->sheet_name . '!A1:V1';
+            $range = $this->sheet_name . '!A1:X1';
             gi_log_error('Writing headers to range', array('range' => $range));
             
             $result = $this->write_sheet_data($range, array($headers));
@@ -828,26 +838,50 @@ class GoogleSheetsSync {
                 
                 // タクソノミーデータの同期（都道府県・市町村・カテゴリー）
                 
-                // 注意: 都道府県・市町村情報はタクソノミーで管理されており、
-                // スプレッドシートには含まれなくなりました。
-                // これらの情報はWordPressの管理画面メタボックスで管理します。
+                // ★完全連携: スプレッドシートからタクソノミーデータを同期
                 
-                // カテゴリを設定（T列のデータから）
+                // 都道府県を設定（T列のデータから） ★完全連携
                 if (isset($row[19]) && !empty($row[19])) {
-                    $categories = array_map('trim', explode(',', $row[19]));
+                    $prefectures = array_map('trim', explode(',', $row[19]));
+                    $prefecture_result = wp_set_post_terms($post_id, $prefectures, 'grant_prefecture');
+                    
+                    gi_log_error('Prefecture sync result', array(
+                        'post_id' => $post_id,
+                        'raw_prefecture_data' => $row[19],
+                        'prefectures_array' => $prefectures,
+                        'set_terms_result' => $prefecture_result
+                    ));
+                }
+                
+                // 市町村を設定（U列のデータから） ★完全連携
+                if (isset($row[20]) && !empty($row[20])) {
+                    $municipalities = array_map('trim', explode(',', $row[20]));
+                    $municipality_result = wp_set_post_terms($post_id, $municipalities, 'grant_municipality');
+                    
+                    gi_log_error('Municipality sync result', array(
+                        'post_id' => $post_id,
+                        'raw_municipality_data' => $row[20],
+                        'municipalities_array' => $municipalities,
+                        'set_terms_result' => $municipality_result
+                    ));
+                }
+                
+                // カテゴリを設定（V列のデータから） ★完全連携
+                if (isset($row[21]) && !empty($row[21])) {
+                    $categories = array_map('trim', explode(',', $row[21]));
                     $category_result = wp_set_post_terms($post_id, $categories, 'grant_category');
                     
                     gi_log_error('Category sync result', array(
                         'post_id' => $post_id,
-                        'raw_category_data' => $row[19],
+                        'raw_category_data' => $row[21],
                         'categories_array' => $categories,
                         'set_terms_result' => $category_result
                     ));
                 }
                 
-                // タグを設定（U列のデータから）
-                if (isset($row[20]) && !empty($row[20])) {
-                    $tags = array_map('trim', explode(',', $row[20]));
+                // タグを設定（W列のデータから） ★完全連携
+                if (isset($row[22]) && !empty($row[22])) {
+                    $tags = array_map('trim', explode(',', $row[22]));
                     wp_set_post_terms($post_id, $tags, 'grant_tag');
                 }
                 
