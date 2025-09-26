@@ -1332,7 +1332,7 @@ class GoogleSheetsSync {
     }
     
     /**
-     * フィールドバリデーション設定のAJAXハンドラー
+     * 📋 フィールドバリデーション設定のAJAXハンドラー (31列完全対応)
      */
     public function ajax_setup_field_validation() {
         // タイムアウトとメモリ制限の拡張
@@ -1355,27 +1355,76 @@ class GoogleSheetsSync {
                 return;
             }
             
-            gi_log_error('Setting up field validation through WordPress API');
+            gi_log_error('Setting up comprehensive field validation for 31-column structure');
             
-            // Google Apps Scriptの設定関数を呼び出すための情報を提供
+            // 完全な31列フィールドマッピング情報を取得
+            $field_mappings = $this->get_field_validation_mappings();
+            
+            // バリデーション統計情報を準備
+            $validation_stats = array(
+                'total_fields' => count($field_mappings),
+                'field_types' => array(),
+                'validation_fields' => array(),
+                'taxonomy_fields' => array(),
+                'readonly_fields' => array()
+            );
+            
+            foreach ($field_mappings as $column => $field) {
+                $type = $field['type'];
+                $validation_stats['field_types'][$type] = ($validation_stats['field_types'][$type] ?? 0) + 1;
+                
+                if ($type === 'select' || $type === 'number') {
+                    $validation_stats['validation_fields'][] = $column . '(' . $field['field_name'] . ')';
+                }
+                
+                if ($type === 'taxonomy') {
+                    $validation_stats['taxonomy_fields'][] = $column . '(' . $field['field_name'] . ')';
+                }
+                
+                if ($type === 'readonly') {
+                    $validation_stats['readonly_fields'][] = $column . '(' . $field['field_name'] . ')';
+                }
+            }
+            
+            // Google Apps Scriptでの設定情報
             $validation_info = array(
                 'spreadsheet_id' => $this->spreadsheet_id,
                 'sheet_name' => $this->sheet_name,
-                'field_mappings' => $this->get_field_validation_mappings(),
-                'instructions' => array(
-                    'step1' => 'スプレッドシートを開いてください',
-                    'step2' => 'メニューから「🏛️ 助成金管理システム」→「WordPress連携」→「🔧 フィールドバリデーション設定」を選択',
-                    'step3' => '設定が完了すると選択肢フィールドが青色の背景で表示されます',
-                    'step4' => 'プルダウンから正しい値を選択できるようになります'
+                'field_mappings' => $field_mappings,
+                'validation_stats' => $validation_stats,
+                'column_range' => 'A:AE', // 31列対応
+                'setup_instructions' => array(
+                    'step1' => '🔗 スプレッドシートを開く',
+                    'step2' => '📋 メニューから「🏛️ 助成金管理システム」→「WordPress連携」→「🔧 フィールドバリデーション設定」を選択',
+                    'step3' => '✅ 31列全体のバリデーション設定が自動実行されます',
+                    'step4' => '🎨 設定完了後、選択肢フィールド（E, M, O, R, S, AB列）が青色背景で表示',
+                    'step5' => '🔢 数値フィールド（I, AA列）に範囲制限が適用',
+                    'step6' => '🔒 読み取り専用フィールド（A, F, G, AE列）がグレー表示',
+                    'step7' => '🌐 URL フィールド（Q, X列）にリンク検証が追加'
+                ),
+                'validation_features' => array(
+                    'dropdown_validation' => 'プルダウンメニューによる入力制限',
+                    'number_validation' => '数値範囲の制限（採択率: 0-100%等）',
+                    'url_validation' => 'URL形式の検証',
+                    'date_validation' => '日付形式の検証',
+                    'required_validation' => '必須項目の設定',
+                    'readonly_protection' => '自動入力フィールドの保護'
                 )
             );
             
-            gi_log_error('Field validation info prepared', array('mappings_count' => count($validation_info['field_mappings'])));
+            gi_log_error('Comprehensive field validation info prepared', array(
+                'total_mappings' => count($field_mappings),
+                'validation_fields' => count($validation_stats['validation_fields']),
+                'taxonomy_fields' => count($validation_stats['taxonomy_fields']),
+                'readonly_fields' => count($validation_stats['readonly_fields'])
+            ));
             
             wp_send_json_success(array(
-                'message' => 'フィールドバリデーション設定の情報を準備しました。Google Apps Scriptでの設定が必要です。',
+                'message' => '📋 31列完全対応フィールドバリデーション設定情報を準備しました',
                 'validation_info' => $validation_info,
-                'next_steps' => $validation_info['instructions']
+                'setup_guide' => $validation_info['setup_instructions'],
+                'features' => $validation_info['validation_features'],
+                'statistics' => $validation_stats
             ));
             
         } catch (Exception $e) {
@@ -1648,7 +1697,7 @@ class GoogleSheetsSync {
     }
     
     /**
-     * 特定フィールドの同期状態をテスト
+     * 📊 31列対応フィールド同期状態テスト
      */
     public function test_specific_field_sync() {
         $sheet_data = $this->read_sheet_data();
@@ -1664,14 +1713,51 @@ class GoogleSheetsSync {
         // ヘッダー行を除去
         $headers = array_shift($sheet_data);
         
+        // フィールドマッピング情報を取得
+        $field_mappings = $this->get_field_validation_mappings();
+        
         $results = array(
             'total_rows' => count($sheet_data),
+            'total_columns' => count($headers),
             'headers' => $headers,
-            'test_results' => array()
+            'field_mappings_count' => count($field_mappings),
+            'test_results' => array(),
+            'field_analysis' => array()
         );
         
-        // 最初の5行をテスト
-        foreach (array_slice($sheet_data, 0, 5) as $index => $row) {
+        // 重要フィールドのテスト対象を31列対応で定義
+        $critical_test_fields = array(
+            // 基本情報
+            'post_title' => 1,              // B列: タイトル
+            'post_status' => 4,             // E列: ステータス
+            
+            // ACFフィールド
+            'max_amount' => 7,              // H列: 助成金額
+            'organization_type' => 12,       // M列: 組織タイプ
+            'application_method' => 14,      // O列: 申請方法
+            'regional_limitation' => 17,     // R列: 地域制限
+            'application_status' => 18,      // S列: 申請ステータス
+            
+            // 新規フィールド (31列対応)
+            'external_link' => 23,          // X列: 外部リンク
+            'region_notes' => 24,           // Y列: 地域に関する備考
+            'required_documents' => 25,      // Z列: 必要書類
+            'adoption_rate' => 26,          // AA列: 採択率
+            'application_difficulty' => 27,  // AB列: 申請難易度
+            'target_expenses' => 28,        // AC列: 対象経費
+            'subsidy_rate' => 29,           // AD列: 補助率
+        );
+        
+        // タクソノミーフィールドのテスト
+        $taxonomy_fields = array(
+            'grant_prefecture' => 19,       // T列: 都道府県
+            'grant_municipality' => 20,     // U列: 市町村
+            'grant_category' => 21,         // V列: カテゴリ
+            'grant_tag' => 22,              // W列: タグ
+        );
+        
+        // 最初の3行をテスト（処理時間を考慮）
+        foreach (array_slice($sheet_data, 0, 3) as $index => $row) {
             $post_id = intval($row[0] ?? 0);
             
             if (!$post_id || !get_post($post_id)) {
@@ -1681,49 +1767,102 @@ class GoogleSheetsSync {
             $row_result = array(
                 'post_id' => $post_id,
                 'post_title' => get_the_title($post_id),
-                'sheet_row' => $index + 2, // ヘッダーを考慮
-                'fields' => array()
+                'sheet_row' => $index + 2,
+                'acf_fields' => array(),
+                'taxonomy_fields' => array(),
+                'sync_status' => array()
             );
             
-            // 問題のフィールドをテスト
-            $test_fields = array(
-                'target_prefecture' => 17, // R列
-                'prefecture_name' => 18,   // S列  
-                'target_municipality' => 19, // T列
-            );
-            
-            foreach ($test_fields as $field_key => $column_index) {
+            // ACFフィールドの同期状態をテスト
+            foreach ($critical_test_fields as $field_key => $column_index) {
                 $sheet_value = $row[$column_index] ?? '';
-                $wp_value = get_field($field_key, $post_id);
                 
-                $row_result['fields'][$field_key] = array(
-                    'column' => chr(65 + $column_index),
+                if ($field_key === 'post_title') {
+                    $wp_value = get_the_title($post_id);
+                } elseif ($field_key === 'post_status') {
+                    $wp_value = get_post_status($post_id);
+                } else {
+                    $wp_value = get_field($field_key, $post_id);
+                }
+                
+                $column_letter = $this->number_to_column($column_index + 1);
+                
+                $row_result['acf_fields'][$field_key] = array(
+                    'column' => $column_letter,
+                    'column_index' => $column_index,
                     'sheet_value' => $sheet_value,
                     'wp_value' => $wp_value,
                     'matches' => (string)$sheet_value === (string)$wp_value,
                     'sheet_empty' => empty($sheet_value),
-                    'wp_empty' => empty($wp_value)
+                    'wp_empty' => empty($wp_value),
+                    'field_type' => $field_mappings[$column_letter]['type'] ?? 'unknown'
                 );
             }
             
-            // カテゴリテスト
-            $category_sheet = $row[22] ?? ''; // W列
-            $category_wp = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
-            $category_wp_str = is_array($category_wp) ? implode(', ', $category_wp) : '';
+            // タクソノミーフィールドの同期状態をテスト
+            foreach ($taxonomy_fields as $taxonomy => $column_index) {
+                $sheet_value = $row[$column_index] ?? '';
+                $wp_terms = wp_get_post_terms($post_id, $taxonomy, array('fields' => 'names'));
+                $wp_value = is_array($wp_terms) && !is_wp_error($wp_terms) ? implode(', ', $wp_terms) : '';
+                
+                $column_letter = $this->number_to_column($column_index + 1);
+                
+                $row_result['taxonomy_fields'][$taxonomy] = array(
+                    'column' => $column_letter,
+                    'column_index' => $column_index,
+                    'sheet_value' => $sheet_value,
+                    'wp_value' => $wp_value,
+                    'matches' => $sheet_value === $wp_value,
+                    'sheet_empty' => empty($sheet_value),
+                    'wp_empty' => empty($wp_value),
+                    'terms_count' => is_array($wp_terms) ? count($wp_terms) : 0
+                );
+            }
             
-            $row_result['fields']['grant_category'] = array(
-                'column' => 'W',
-                'sheet_value' => $category_sheet,
-                'wp_value' => $category_wp_str,
-                'matches' => $category_sheet === $category_wp_str,
-                'sheet_empty' => empty($category_sheet),
-                'wp_empty' => empty($category_wp_str)
+            // 同期状態の統計
+            $total_tested = count($row_result['acf_fields']) + count($row_result['taxonomy_fields']);
+            $matched_fields = 0;
+            
+            foreach ($row_result['acf_fields'] as $field_data) {
+                if ($field_data['matches']) $matched_fields++;
+            }
+            
+            foreach ($row_result['taxonomy_fields'] as $field_data) {
+                if ($field_data['matches']) $matched_fields++;
+            }
+            
+            $row_result['sync_status'] = array(
+                'total_tested' => $total_tested,
+                'matched_fields' => $matched_fields,
+                'sync_rate' => $total_tested > 0 ? round(($matched_fields / $total_tested) * 100, 2) : 0,
+                'has_issues' => $matched_fields < $total_tested
             );
             
             $results['test_results'][] = $row_result;
         }
         
+        // フィールド分析統計を追加
+        $results['field_analysis'] = array(
+            'tested_acf_fields' => count($critical_test_fields),
+            'tested_taxonomy_fields' => count($taxonomy_fields),
+            'total_columns_available' => 31, // AE列まで
+            'coverage_percentage' => round(((count($critical_test_fields) + count($taxonomy_fields)) / 31) * 100, 2)
+        );
+        
         return $results;
+    }
+    
+    /**
+     * 数値を列文字に変換（1=A, 2=B, ..., 27=AA, 28=AB, etc.）
+     */
+    private function number_to_column($number) {
+        $column = '';
+        while ($number > 0) {
+            $number--;
+            $column = chr(65 + ($number % 26)) . $column;
+            $number = intval($number / 26);
+        }
+        return $column;
     }
     
     /**
