@@ -524,6 +524,18 @@ class GoogleSheetsSync {
                 $row[] = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value;
             }
             
+            // タクソノミーデータを上書き（WordPressタクソノミーに変更されたため）
+            // R列: 都道府県データ（タクソノミーから取得）
+            $prefectures = wp_get_post_terms($post_id, 'grant_prefecture', array('fields' => 'names'));
+            $row[17] = (is_array($prefectures) && !is_wp_error($prefectures) && !empty($prefectures)) ? $prefectures[0] : ''; // 最初の都道府県のみ
+            
+            // S列: 都道府県名（R列と同じ）
+            $row[18] = $row[17];
+            
+            // T列: 対象市町村（タクソノミーから取得）
+            $municipalities = wp_get_post_terms($post_id, 'grant_municipality', array('fields' => 'names'));
+            $row[19] = (is_array($municipalities) && !is_wp_error($municipalities)) ? implode(', ', $municipalities) : '';
+            
             // カテゴリを追加 (W列)
             $categories = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
             $row[] = (is_array($categories) && !is_wp_error($categories)) ? implode(', ', $categories) : '';
@@ -806,7 +818,7 @@ class GoogleSheetsSync {
             }
             
             if ($post_id && !is_wp_error($post_id)) {
-                // ACFフィールドを更新
+                // ACFフィールドを更新（タクソノミー化されたフィールドは除外）
                 $acf_fields = array(
                     'max_amount' => isset($row[7]) ? $row[7] : '',
                     'max_amount_numeric' => isset($row[8]) ? intval($row[8]) : 0,
@@ -818,65 +830,68 @@ class GoogleSheetsSync {
                     'application_method' => isset($row[14]) ? $row[14] : 'online',
                     'contact_info' => isset($row[15]) ? $row[15] : '',
                     'official_url' => isset($row[16]) ? $row[16] : '',
-                    'target_prefecture' => isset($row[17]) ? $row[17] : '',
-                    'prefecture_name' => isset($row[18]) ? $row[18] : '',
-                    'target_municipality' => isset($row[19]) ? $row[19] : '',
+                    // 'target_prefecture' => タクソノミーに変更したため削除
+                    // 'prefecture_name' => タクソノミーに変更したため削除  
+                    // 'target_municipality' => タクソノミーに変更したため削除
                     'regional_limitation' => isset($row[20]) ? $row[20] : 'nationwide',
                     'application_status' => isset($row[21]) ? $row[21] : 'open',
                 );
                 
-                // 問題のあるフィールドの詳細ログ
-                gi_log_error('Syncing problematic fields', array(
+                // ACFフィールドの同期ログ
+                gi_log_error('Syncing ACF fields', array(
                     'post_id' => $post_id,
                     'row_index' => $row_index,
-                    'target_prefecture_raw' => $row[17] ?? null,
-                    'prefecture_name_raw' => $row[18] ?? null,
-                    'target_municipality_raw' => $row[19] ?? null,
-                    'category_raw' => $row[22] ?? null,
-                    'target_prefecture_value' => $acf_fields['target_prefecture'],
-                    'prefecture_name_value' => $acf_fields['prefecture_name'],
-                    'target_municipality_value' => $acf_fields['target_municipality'],
+                    'acf_fields_count' => count($acf_fields),
                     'row_length' => count($row)
                 ));
                 
+                // ACFフィールドを更新
                 foreach ($acf_fields as $field => $value) {
                     $update_result = update_field($field, $value, $post_id);
-                    
-                    // 問題のあるフィールドの更新結果をログ
-                    if (in_array($field, array('target_prefecture', 'prefecture_name', 'target_municipality'))) {
-                        gi_log_error('Field update result', array(
-                            'post_id' => $post_id,
-                            'field' => $field,
-                            'value' => $value,
-                            'update_result' => $update_result,
-                            'current_value_after_update' => get_field($field, $post_id)
-                        ));
-                    }
                 }
                 
-                // カテゴリを設定
+                // タクソノミーデータの同期（都道府県・市町村・カテゴリー）
+                
+                // 都道府県を設定（R列・S列のデータから）
+                if (isset($row[17]) && !empty($row[17])) {
+                    $prefecture_name = trim($row[17]); // S列からも同じデータが取得可能
+                    $prefecture_result = wp_set_post_terms($post_id, array($prefecture_name), 'grant_prefecture');
+                    
+                    gi_log_error('Prefecture sync result', array(
+                        'post_id' => $post_id,
+                        'raw_prefecture_data' => $row[17],
+                        'prefecture_name' => $prefecture_name,
+                        'set_terms_result' => $prefecture_result
+                    ));
+                }
+                
+                // 市町村を設定（T列のデータから）
+                if (isset($row[19]) && !empty($row[19])) {
+                    $municipalities = array_map('trim', explode(',', $row[19]));
+                    $municipality_result = wp_set_post_terms($post_id, $municipalities, 'grant_municipality');
+                    
+                    gi_log_error('Municipality sync result', array(
+                        'post_id' => $post_id,
+                        'raw_municipality_data' => $row[19],
+                        'municipalities_array' => $municipalities,
+                        'set_terms_result' => $municipality_result
+                    ));
+                }
+                
+                // カテゴリを設定（W列のデータから）
                 if (isset($row[22]) && !empty($row[22])) {
                     $categories = array_map('trim', explode(',', $row[22]));
                     $category_result = wp_set_post_terms($post_id, $categories, 'grant_category');
                     
-                    // カテゴリ設定の結果をログ
                     gi_log_error('Category sync result', array(
                         'post_id' => $post_id,
                         'raw_category_data' => $row[22],
                         'categories_array' => $categories,
-                        'set_terms_result' => $category_result,
-                        'current_terms_after_update' => wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'))
-                    ));
-                } else {
-                    gi_log_error('No category data to sync', array(
-                        'post_id' => $post_id,
-                        'row_22_isset' => isset($row[22]),
-                        'row_22_empty' => empty($row[22] ?? ''),
-                        'row_22_value' => $row[22] ?? null
+                        'set_terms_result' => $category_result
                     ));
                 }
                 
-                // タグを設定
+                // タグを設定（X列のデータから）
                 if (isset($row[23]) && !empty($row[23])) {
                     $tags = array_map('trim', explode(',', $row[23]));
                     wp_set_post_terms($post_id, $tags, 'grant_tag');
