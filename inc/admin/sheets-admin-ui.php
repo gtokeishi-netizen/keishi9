@@ -295,21 +295,39 @@ class SheetsAdminUI {
                                 </tr>
                                 <tr style="background: #f9f9f9;">
                                     <td><strong>R列</strong></td>
-                                    <td>都道府県コード</td>
-                                    <td><code>target_prefecture</code></td>
-                                    <td>tokyo（東京都）/ osaka（大阪府）/ hokkaido（北海道）等、全47都道府県のコード</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>U列</strong></td>
                                     <td>地域制限</td>
                                     <td><code>regional_limitation</code></td>
                                     <td>nationwide（全国対象）/ prefecture_only（都道府県内限定）/ municipality_only（市町村限定）/ region_group（地域グループ限定）/ specific_area（特定地域限定）</td>
                                 </tr>
                                 <tr style="background: #f9f9f9;">
-                                    <td><strong>V列</strong></td>
+                                    <td><strong>S列</strong></td>
                                     <td>申請ステータス</td>
                                     <td><code>application_status</code></td>
                                     <td>open（募集中）/ upcoming（募集予定）/ closed（募集終了）/ suspended（一時停止）</td>
+                                </tr>
+                                <tr style="background: #e8f5e8;">
+                                    <td><strong>T列 ⭐完全連携</strong></td>
+                                    <td>🏛️ 都道府県</td>
+                                    <td><code>grant_prefecture</code></td>
+                                    <td>北海道、東京都、大阪府等（タクソノミー、カンマ区切り可能）</td>
+                                </tr>
+                                <tr style="background: #e8f5e8;">
+                                    <td><strong>U列 ⭐完全連携</strong></td>
+                                    <td>🏘️ 市町村</td>
+                                    <td><code>grant_municipality</code></td>
+                                    <td>新宿区、渋谷区、札幌市等（タクソノミー、カンマ区切り可能）</td>
+                                </tr>
+                                <tr style="background: #e8f5e8;">
+                                    <td><strong>V列 ⭐完全連携</strong></td>
+                                    <td>📂 カテゴリ</td>
+                                    <td><code>grant_category</code></td>
+                                    <td>創業支援、研究開発、地域活性化等（タクソノミー、カンマ区切り可能）</td>
+                                </tr>
+                                <tr style="background: #e8f5e8;">
+                                    <td><strong>W列 ⭐完全連携</strong></td>
+                                    <td>🏷️ タグ</td>
+                                    <td><code>post_tag</code></td>
+                                    <td>スタートアップ、AI、環境等（WordPressタグ、カンマ区切り可能）</td>
                                 </tr>
                             </tbody>
                         </table>

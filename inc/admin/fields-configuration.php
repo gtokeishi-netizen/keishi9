@@ -337,97 +337,8 @@ function gi_register_acf_field_groups() {
             ),
             
             // ========== 地域情報 ==========
-            array(
-                'key' => 'field_target_prefecture',
-                'label' => '対象都道府県',
-                'name' => 'target_prefecture',
-                'type' => 'select',
-                'instructions' => '助成金の対象となる都道府県を選択してください。',
-                'required' => 0,
-                'choices' => array(
-                    '' => '全国対象',
-                    'hokkaido' => '北海道',
-                    'aomori' => '青森県',
-                    'iwate' => '岩手県',
-                    'miyagi' => '宮城県',
-                    'akita' => '秋田県',
-                    'yamagata' => '山形県',
-                    'fukushima' => '福島県',
-                    'ibaraki' => '茨城県',
-                    'tochigi' => '栃木県',
-                    'gunma' => '群馬県',
-                    'saitama' => '埼玉県',
-                    'chiba' => '千葉県',
-                    'tokyo' => '東京都',
-                    'kanagawa' => '神奈川県',
-                    'niigata' => '新潟県',
-                    'toyama' => '富山県',
-                    'ishikawa' => '石川県',
-                    'fukui' => '福井県',
-                    'yamanashi' => '山梨県',
-                    'nagano' => '長野県',
-                    'gifu' => '岐阜県',
-                    'shizuoka' => '静岡県',
-                    'aichi' => '愛知県',
-                    'mie' => '三重県',
-                    'shiga' => '滋賀県',
-                    'kyoto' => '京都府',
-                    'osaka' => '大阪府',
-                    'hyogo' => '兵庫県',
-                    'nara' => '奈良県',
-                    'wakayama' => '和歌山県',
-                    'tottori' => '鳥取県',
-                    'shimane' => '島根県',
-                    'okayama' => '岡山県',
-                    'hiroshima' => '広島県',
-                    'yamaguchi' => '山口県',
-                    'tokushima' => '徳島県',
-                    'kagawa' => '香川県',
-                    'ehime' => '愛媛県',
-                    'kochi' => '高知県',
-                    'fukuoka' => '福岡県',
-                    'saga' => '佐賀県',
-                    'nagasaki' => '長崎県',
-                    'kumamoto' => '熊本県',
-                    'oita' => '大分県',
-                    'miyazaki' => '宮崎県',
-                    'kagoshima' => '鹿児島県',
-                    'okinawa' => '沖縄県',
-                ),
-                'default_value' => '',
-                'allow_null' => 1,
-                'multiple' => 0,
-                'wrapper' => array(
-                    'width' => '33.33',
-                ),
-            ),
-            
-            array(
-                'key' => 'field_target_municipality',
-                'label' => '対象市町村',
-                'name' => 'target_municipality',
-                'type' => 'textarea',
-                'instructions' => '助成金の対象となる市町村を入力してください。複数ある場合は改行で区切ってください。',
-                'required' => 0,
-                'rows' => 3,
-                'placeholder' => '例: 新宿区\n渋谷区\n港区',
-                'wrapper' => array(
-                    'width' => '33.33',
-                ),
-            ),
-            
-            array(
-                'key' => 'field_prefecture_name',
-                'label' => '都道府県名（表示用）',
-                'name' => 'prefecture_name',
-                'type' => 'text',
-                'instructions' => 'スプレッドシート用の都道府県名（自動入力されます）',
-                'required' => 0,
-                'readonly' => 1,
-                'wrapper' => array(
-                    'width' => '33.34',
-                ),
-            ),
+            // 注意: 完全連携により都道府県・市町村はタクソノミーで管理されるようになりました
+            // 以下のACFフィールドは後方互換性のため残していますが、新規作成時はタクソノミーを使用してください
             
             array(
                 'key' => 'field_regional_limitation',
@@ -739,11 +650,19 @@ add_action('save_post', function($post_id) {
         update_field('max_amount', $formatted_amount, $post_id);
     }
     
-    // 都道府県コードから都道府県名を自動設定
-    $prefecture_code = get_field('target_prefecture', $post_id);
-    if (!empty($prefecture_code)) {
-        $prefecture_name = gi_get_prefecture_name_by_code($prefecture_code);
-        update_field('prefecture_name', $prefecture_name, $post_id);
+    // 完全連携：タクソノミーからACFフィールドへの同期（後方互換性）
+    // 都道府県タクソノミーからACFフィールドを更新
+    $prefecture_terms = wp_get_post_terms($post_id, 'grant_prefecture', array('fields' => 'names'));
+    if (!is_wp_error($prefecture_terms) && !empty($prefecture_terms)) {
+        // 最初の都道府県名をACFフィールドにも保存（後方互換性）
+        update_field('prefecture_name', $prefecture_terms[0], $post_id);
+    }
+    
+    // 市町村タクソノミーからACFフィールドを更新
+    $municipality_terms = wp_get_post_terms($post_id, 'grant_municipality', array('fields' => 'names'));
+    if (!is_wp_error($municipality_terms) && !empty($municipality_terms)) {
+        // 市町村名をACFフィールドにも保存（後方互換性、改行区切り）
+        update_field('target_municipality', implode("\n", $municipality_terms), $post_id);
     }
 });
 
