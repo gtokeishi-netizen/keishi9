@@ -491,7 +491,7 @@ class GoogleSheetsSync {
                 $post->post_modified, // G: 更新日
             );
             
-            // ACFフィールドを追加 (H-V列)
+            // ACFフィールドを追加 (H-Q列)
             $acf_fields = array(
                 'max_amount',              // H: 助成金額（表示用）
                 'max_amount_numeric',      // I: 助成金額（数値）
@@ -502,49 +502,31 @@ class GoogleSheetsSync {
                 'grant_target',            // N: 対象者・対象事業
                 'application_method',      // O: 申請方法
                 'contact_info',            // P: 問い合わせ先
-                'official_url',            // Q: 公式URL
-                'target_prefecture',       // R: 都道府県コード
-                'prefecture_name',         // S: 都道府県名
-                'target_municipality',     // T: 対象市町村
-                'regional_limitation',     // U: 地域制限
-                'application_status'       // V: 申請ステータス
+                'official_url'             // Q: 公式URL
             );
             
             foreach ($acf_fields as $field) {
                 $value = get_field($field, $post_id);
-                
-                // 都道府県名の自動生成
-                if ($field === 'prefecture_name' && empty($value)) {
-                    $prefecture_code = get_field('target_prefecture', $post_id);
-                    if ($prefecture_code && function_exists('gi_get_prefecture_name_by_code')) {
-                        $value = gi_get_prefecture_name_by_code($prefecture_code);
-                    }
-                }
-                
                 $row[] = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value;
             }
             
-            // タクソノミーデータを上書き（WordPressタクソノミーに変更されたため）
-            // R列: 都道府県データ（タクソノミーから取得）
-            $prefectures = wp_get_post_terms($post_id, 'grant_prefecture', array('fields' => 'names'));
-            $row[17] = (is_array($prefectures) && !is_wp_error($prefectures) && !empty($prefectures)) ? $prefectures[0] : ''; // 最初の都道府県のみ
+            // R列: 地域制限 (ACFフィールド)
+            $regional_limitation = get_field('regional_limitation', $post_id);
+            $row[] = (string)$regional_limitation;
             
-            // S列: 都道府県名（R列と同じ）
-            $row[18] = $row[17];
+            // S列: 申請ステータス (ACFフィールド)
+            $application_status = get_field('application_status', $post_id);
+            $row[] = (string)$application_status;
             
-            // T列: 対象市町村（タクソノミーから取得）
-            $municipalities = wp_get_post_terms($post_id, 'grant_municipality', array('fields' => 'names'));
-            $row[19] = (is_array($municipalities) && !is_wp_error($municipalities)) ? implode(', ', $municipalities) : '';
-            
-            // カテゴリを追加 (W列)
+            // T列: カテゴリ (タクソノミー)
             $categories = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
             $row[] = (is_array($categories) && !is_wp_error($categories)) ? implode(', ', $categories) : '';
             
-            // タグを追加 (X列)
+            // U列: タグ (タクソノミー)
             $tags = wp_get_post_terms($post_id, 'grant_tag', array('fields' => 'names'));
             $row[] = (is_array($tags) && !is_wp_error($tags)) ? implode(', ', $tags) : '';
             
-            // シート更新日を追加 (Y列)
+            // V列: シート更新日
             $row[] = current_time('mysql');
             
             gi_log_error('Post converted to sheet row successfully', array('post_id' => $post_id, 'columns' => count($row)));
@@ -586,19 +568,16 @@ class GoogleSheetsSync {
                 '申請方法 (online/mail/visit/mixed)',     // O列 - 申請方法
                 '問い合わせ先',                          // P列 - 連絡先情報
                 '公式URL',                               // Q列 - 公式サイトURL
-                '都道府県コード (hokkaido/tokyo等)',      // R列 - 地域コード
-                '都道府県名 (自動入力)',                  // S列 - 地域名
-                '対象市町村',                            // T列 - 対象市町村
-                '地域制限 (nationwide/prefecture_only/municipality_only/region_group/specific_area)', // U列 - 地域制限タイプ
-                '申請ステータス (open/upcoming/closed/suspended)', // V列 - 募集状況
-                'カテゴリ',                              // W列 - 分類カテゴリ
-                'タグ',                                  // X列 - タグ
-                'シート更新日 (自動入力)'                // Y列 - 最終同期日時
+                '地域制限 (nationwide/prefecture_only/municipality_only/region_group/specific_area)', // R列 - 地域制限タイプ (旧U列)
+                '申請ステータス (open/upcoming/closed/suspended)', // S列 - 募集状況 (旧V列)
+                'カテゴリ',                              // T列 - 分類カテゴリ (旧W列)
+                'タグ',                                  // U列 - タグ (旧X列)
+                'シート更新日 (自動入力)'                // V列 - 最終同期日時 (旧Y列)
             );
             
             gi_log_error('Headers array created', array('count' => count($headers)));
             
-            $range = $this->sheet_name . '!A1:Y1';
+            $range = $this->sheet_name . '!A1:V1';
             gi_log_error('Writing headers to range', array('range' => $range));
             
             $result = $this->write_sheet_data($range, array($headers));
@@ -830,11 +809,8 @@ class GoogleSheetsSync {
                     'application_method' => isset($row[14]) ? $row[14] : 'online',
                     'contact_info' => isset($row[15]) ? $row[15] : '',
                     'official_url' => isset($row[16]) ? $row[16] : '',
-                    // 'target_prefecture' => タクソノミーに変更したため削除
-                    // 'prefecture_name' => タクソノミーに変更したため削除  
-                    // 'target_municipality' => タクソノミーに変更したため削除
-                    'regional_limitation' => isset($row[20]) ? $row[20] : 'nationwide',
-                    'application_status' => isset($row[21]) ? $row[21] : 'open',
+                    'regional_limitation' => isset($row[17]) ? $row[17] : 'nationwide', // 新R列
+                    'application_status' => isset($row[18]) ? $row[18] : 'open', // 新S列
                 );
                 
                 // ACFフィールドの同期ログ
@@ -852,48 +828,26 @@ class GoogleSheetsSync {
                 
                 // タクソノミーデータの同期（都道府県・市町村・カテゴリー）
                 
-                // 都道府県を設定（R列・S列のデータから）
-                if (isset($row[17]) && !empty($row[17])) {
-                    $prefecture_name = trim($row[17]); // S列からも同じデータが取得可能
-                    $prefecture_result = wp_set_post_terms($post_id, array($prefecture_name), 'grant_prefecture');
-                    
-                    gi_log_error('Prefecture sync result', array(
-                        'post_id' => $post_id,
-                        'raw_prefecture_data' => $row[17],
-                        'prefecture_name' => $prefecture_name,
-                        'set_terms_result' => $prefecture_result
-                    ));
-                }
+                // 注意: 都道府県・市町村情報はタクソノミーで管理されており、
+                // スプレッドシートには含まれなくなりました。
+                // これらの情報はWordPressの管理画面メタボックスで管理します。
                 
-                // 市町村を設定（T列のデータから）
+                // カテゴリを設定（T列のデータから）
                 if (isset($row[19]) && !empty($row[19])) {
-                    $municipalities = array_map('trim', explode(',', $row[19]));
-                    $municipality_result = wp_set_post_terms($post_id, $municipalities, 'grant_municipality');
-                    
-                    gi_log_error('Municipality sync result', array(
-                        'post_id' => $post_id,
-                        'raw_municipality_data' => $row[19],
-                        'municipalities_array' => $municipalities,
-                        'set_terms_result' => $municipality_result
-                    ));
-                }
-                
-                // カテゴリを設定（W列のデータから）
-                if (isset($row[22]) && !empty($row[22])) {
-                    $categories = array_map('trim', explode(',', $row[22]));
+                    $categories = array_map('trim', explode(',', $row[19]));
                     $category_result = wp_set_post_terms($post_id, $categories, 'grant_category');
                     
                     gi_log_error('Category sync result', array(
                         'post_id' => $post_id,
-                        'raw_category_data' => $row[22],
+                        'raw_category_data' => $row[19],
                         'categories_array' => $categories,
                         'set_terms_result' => $category_result
                     ));
                 }
                 
-                // タグを設定（X列のデータから）
-                if (isset($row[23]) && !empty($row[23])) {
-                    $tags = array_map('trim', explode(',', $row[23]));
+                // タグを設定（U列のデータから）
+                if (isset($row[20]) && !empty($row[20])) {
+                    $tags = array_map('trim', explode(',', $row[20]));
                     wp_set_post_terms($post_id, $tags, 'grant_tag');
                 }
                 

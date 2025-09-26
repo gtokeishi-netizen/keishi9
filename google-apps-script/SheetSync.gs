@@ -332,14 +332,11 @@ function setupHeaders(sheet) {
     '申請方法',              // O列
     '問い合わせ先',          // P列
     '公式URL',               // Q列
-    '都道府県コード',        // R列
-    '都道府県名',            // S列
-    '対象市町村',            // T列
-    '地域制限',              // U列
-    '申請ステータス',        // V列
-    'カテゴリ',              // W列
-    'タグ',                  // X列
-    'シート更新日'           // Y列
+    '地域制限',              // R列 (旧U列)
+    '申請ステータス',        // S列 (旧V列)
+    'カテゴリ',              // T列 (旧W列)
+    'タグ',                  // U列 (旧X列)
+    'シート更新日'           // V列 (旧Y列)
   ];
   
   // ヘッダー行を設定
@@ -427,14 +424,11 @@ function requestGrantPostsFromWordPress() {
         'online',  // 申請方法
         'contact@example.com',  // 問い合わせ先
         'https://example.com',  // 公式URL
-        'tokyo',  // 都道府県コード
-        '東京都',  // 都道府県名
-        '全域',  // 対象市町村
-        'prefecture',  // 地域制限
-        'open',  // 申請ステータス
-        'ビジネス支援',  // カテゴリ
-        'スタートアップ, 中小企業',  // タグ
-        new Date().toISOString().substring(0, 19).replace('T', ' ')  // シート更新日
+        'prefecture_only',  // 地域制限 (新R列)
+        'open',  // 申請ステータス (新S列)
+        'ビジネス支援',  // カテゴリ (新T列)
+        'スタートアップ, 中小企業',  // タグ (新U列)
+        new Date().toISOString().substring(0, 19).replace('T', ' ')  // シート更新日 (新V列)
       ]
     ];
   }
@@ -1366,14 +1360,11 @@ function convertJgrantsToWordPressFormat(jgrantsData) {
     'online', // 申請方法（Jグランツは基本オンライン）
     grant.contact_information || 'Jグランツサイトを確認', // 問い合わせ先
     `https://www.jgrants-portal.go.jp/grants/detail/${grant.id}`, // 公式URL
-    extractPrefectureCode(grant.target_area_search), // 都道府県コード
-    extractPrefectureName(grant.target_area_search), // 都道府県名
-    grant.target_area_detail || '全域', // 対象市町村
-    determineAreaRestriction(grant.target_area_search), // 地域制限
-    determineApplicationStatus(grant.acceptance_start_datetime, grant.acceptance_end_datetime), // 申請ステータス
-    '政府系助成金, Jグランツ', // カテゴリ
-    extractTags(grant), // タグ
-    new Date().toISOString().substring(0, 19).replace('T', ' ') // シート更新日
+    determineAreaRestriction(grant.target_area_search), // 地域制限 (新R列)
+    determineApplicationStatus(grant.acceptance_start_datetime, grant.acceptance_end_datetime), // 申請ステータス (新S列)
+    '政府系助成金, Jグランツ', // カテゴリ (新T列)
+    extractTags(grant), // タグ (新U列)
+    new Date().toISOString().substring(0, 19).replace('T', ' ') // シート更新日 (新V列)
   ]);
 }
 
@@ -1420,60 +1411,7 @@ function extractDateFromString(dateString) {
   }
 }
 
-/**
- * 地域名から都道府県コードを推定
- */
-function extractPrefectureCode(areaString) {
-  if (!areaString) return 'nationwide';
-  
-  const prefCodes = {
-    '北海道': 'hokkaido', '青森': 'aomori', '岩手': 'iwate', '宮城': 'miyagi',
-    '秋田': 'akita', '山形': 'yamagata', '福島': 'fukushima', '茨城': 'ibaraki',
-    '栃木': 'tochigi', '群馬': 'gunma', '埼玉': 'saitama', '千葉': 'chiba',
-    '東京': 'tokyo', '神奈川': 'kanagawa', '新潟': 'niigata', '富山': 'toyama',
-    '石川': 'ishikawa', '福井': 'fukui', '山梨': 'yamanashi', '長野': 'nagano',
-    '岐阜': 'gifu', '静岡': 'shizuoka', '愛知': 'aichi', '三重': 'mie',
-    '滋賀': 'shiga', '京都': 'kyoto', '大阪': 'osaka', '兵庫': 'hyogo',
-    '奈良': 'nara', '和歌山': 'wakayama', '鳥取': 'tottori', '島根': 'shimane',
-    '岡山': 'okayama', '広島': 'hiroshima', '山口': 'yamaguchi', '徳島': 'tokushima',
-    '香川': 'kagawa', '愛媛': 'ehime', '高知': 'kochi', '福岡': 'fukuoka',
-    '佐賀': 'saga', '長崎': 'nagasaki', '熊本': 'kumamoto', '大分': 'oita',
-    '宮崎': 'miyazaki', '鹿児島': 'kagoshima', '沖縄': 'okinawa'
-  };
-  
-  for (const [name, code] of Object.entries(prefCodes)) {
-    if (areaString.includes(name)) {
-      return code;
-    }
-  }
-  
-  return 'nationwide';
-}
-
-/**
- * 都道府県名を抽出
- */
-function extractPrefectureName(areaString) {
-  if (!areaString) return '全国';
-  
-  const prefectures = [
-    '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
-    '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
-    '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
-    '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
-    '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
-    '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
-    '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'
-  ];
-  
-  for (const pref of prefectures) {
-    if (areaString.includes(pref)) {
-      return pref;
-    }
-  }
-  
-  return '全国';
-}
+// Prefecture-related functions removed - taxonomy data is now managed through WordPress metaboxes
 
 /**
  * 地域制限を決定
@@ -1562,19 +1500,8 @@ function setupFieldValidation() {
       'mixed'         // オンライン・郵送併用
     ]);
     
-    // R列: 都道府県コード
+    // R列: 地域制限 (旧U列から移動)
     setupDropdownValidation(sheet, 'R:R', [
-      '', 'hokkaido', 'aomori', 'iwate', 'miyagi', 'akita', 'yamagata', 'fukushima',
-      'ibaraki', 'tochigi', 'gunma', 'saitama', 'chiba', 'tokyo', 'kanagawa',
-      'niigata', 'toyama', 'ishikawa', 'fukui', 'yamanashi', 'nagano', 'gifu',
-      'shizuoka', 'aichi', 'mie', 'shiga', 'kyoto', 'osaka', 'hyogo', 'nara',
-      'wakayama', 'tottori', 'shimane', 'okayama', 'hiroshima', 'yamaguchi',
-      'tokushima', 'kagawa', 'ehime', 'kochi', 'fukuoka', 'saga', 'nagasaki',
-      'kumamoto', 'oita', 'miyazaki', 'kagoshima', 'okinawa'
-    ]);
-    
-    // U列: 地域制限
-    setupDropdownValidation(sheet, 'U:U', [
       'nationwide',        // 全国対象
       'prefecture_only',   // 都道府県内限定
       'municipality_only', // 市町村限定
@@ -1582,8 +1509,8 @@ function setupFieldValidation() {
       'specific_area'      // 特定地域限定
     ]);
     
-    // V列: 申請ステータス
-    setupDropdownValidation(sheet, 'V:V', [
+    // S列: 申請ステータス (旧V列から移動)
+    setupDropdownValidation(sheet, 'S:S', [
       'open',             // 募集中
       'upcoming',         // 募集予定
       'closed',           // 募集終了
@@ -1593,7 +1520,7 @@ function setupFieldValidation() {
     console.log('Field validation setup completed successfully');
     
     // セルの背景色を設定（選択肢フィールドを識別しやすくする）
-    const validationColumns = ['E', 'M', 'O', 'R', 'U', 'V'];
+    const validationColumns = ['E', 'M', 'O', 'R', 'S'];
     validationColumns.forEach(column => {
       const range = sheet.getRange(`${column}1:${column}1000`);
       range.setBackground('#f0f8ff'); // 薄い青色で選択肢フィールドを区別
@@ -1692,9 +1619,10 @@ function showUsageGuide() {
 • E列: ステータス (draft/publish/private/deleted)
 • M列: 組織タイプ (national/prefecture/city等)
 • O列: 申請方法 (online/mail/visit/mixed)
-• R列: 都道府県コード (tokyo/osaka等)
-• U列: 地域制限 (nationwide/prefecture_only等)
-• V列: 申請ステータス (open/closed/upcoming/suspended)
+• R列: 地域制限 (nationwide/prefecture_only等)
+• S列: 申請ステータス (open/closed/upcoming/suspended)
+
+【注意】都道府県・市町村情報はWordPressのタクソノミーで管理されます
 
 【初回設定】
 1. 🛠️ 初期設定（トリガー設定）を実行
