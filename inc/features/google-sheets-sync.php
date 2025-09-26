@@ -297,7 +297,7 @@ class GoogleSheetsSync {
         }
         
         if (!$range) {
-            $range = $this->get_sheet_name() . '!A:Y'; // 全データを取得（Y列まで）
+            $range = $this->get_sheet_name() . '!A:AE'; // 全データを取得（AE列まで）31列対応
         }
         
         gi_log_error('Reading from sheets', array(
@@ -534,7 +534,23 @@ class GoogleSheetsSync {
             $tags = wp_get_post_terms($post_id, 'grant_tag', array('fields' => 'names'));
             $row[] = (is_array($tags) && !is_wp_error($tags)) ? implode(', ', $tags) : '';
             
-            // X列: シート更新日
+            // 新規フィールド (X-AD列) ★31列対応
+            $new_acf_fields = array(
+                'external_link',           // X: 外部リンク
+                'region_notes',            // Y: 地域に関する備考
+                'required_documents',      // Z: 必要書類
+                'adoption_rate',           // AA: 採択率（%）
+                'application_difficulty',  // AB: 申請難易度
+                'target_expenses',         // AC: 対象経費
+                'subsidy_rate'             // AD: 補助率
+            );
+            
+            foreach ($new_acf_fields as $field) {
+                $value = get_field($field, $post_id);
+                $row[] = is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value;
+            }
+            
+            // AE列: シート更新日
             $row[] = current_time('mysql');
             
             gi_log_error('Post converted to sheet row successfully', array('post_id' => $post_id, 'columns' => count($row)));
@@ -582,12 +598,19 @@ class GoogleSheetsSync {
                 '市町村 (例: 新宿区,渋谷区)',            // U列 - 市町村名 ★完全連携
                 'カテゴリ (例: ビジネス支援,IT関連)',     // V列 - 分類カテゴリ ★完全連携
                 'タグ (例: スタートアップ,中小企業)',     // W列 - タグ ★完全連携
-                'シート更新日 (自動入力)'                // X列 - 最終同期日時
+                '外部リンク',                            // X列 - 参考リンク
+                '地域に関する備考',                      // Y列 - 地域制限の詳細
+                '必要書類',                              // Z列 - 申請に必要な書類
+                '採択率（%）',                          // AA列 - 採択率の数値
+                '申請難易度 (easy/normal/hard/very_hard)', // AB列 - 難易度評価
+                '対象経費',                              // AC列 - 補助対象経費の詳細
+                '補助率 (例: 2/3, 50%)',                // AD列 - 補助率・補助割合
+                'シート更新日 (自動入力)'                // AE列 - 最終同期日時
             );
             
             gi_log_error('Headers array created', array('count' => count($headers)));
             
-            $range = $this->sheet_name . '!A1:X1';
+            $range = $this->sheet_name . '!A1:AE1';
             gi_log_error('Writing headers to range', array('range' => $range));
             
             $result = $this->write_sheet_data($range, array($headers));
@@ -652,8 +675,8 @@ class GoogleSheetsSync {
             gi_log_error('Row search result', array('post_id' => $post_id, 'row_number' => $row_number));
             
             if ($row_number) {
-                // 既存行を更新 - 正しい列範囲（Y列まで）を使用
-                $range = $this->sheet_name . '!A' . $row_number . ':Y' . $row_number;
+                // 既存行を更新 - 31列対応（AE列まで）
+                $range = $this->sheet_name . '!A' . $row_number . ':AE' . $row_number;
                 gi_log_error('Updating existing row', array('post_id' => $post_id, 'range' => $range));
                 $success = $this->write_sheet_data($range, array($row_data));
             } else {
@@ -885,6 +908,28 @@ class GoogleSheetsSync {
                     wp_set_post_terms($post_id, $tags, 'grant_tag');
                 }
                 
+                // 新規ACFフィールドの同期 (X-AD列) ★31列対応
+                $new_acf_fields = array(
+                    'external_link' => isset($row[23]) ? $row[23] : '',           // X列: 外部リンク
+                    'region_notes' => isset($row[24]) ? $row[24] : '',            // Y列: 地域に関する備考
+                    'required_documents' => isset($row[25]) ? $row[25] : '',      // Z列: 必要書類
+                    'adoption_rate' => isset($row[26]) ? floatval($row[26]) : 0,  // AA列: 採択率（%）
+                    'application_difficulty' => isset($row[27]) ? $row[27] : 'normal', // AB列: 申請難易度
+                    'target_expenses' => isset($row[28]) ? $row[28] : '',         // AC列: 対象経費
+                    'subsidy_rate' => isset($row[29]) ? $row[29] : '',            // AD列: 補助率
+                );
+                
+                // 新規ACFフィールドを更新
+                foreach ($new_acf_fields as $field => $value) {
+                    $update_result = update_field($field, $value, $post_id);
+                    gi_log_error('New ACF field updated', array(
+                        'post_id' => $post_id,
+                        'field' => $field,
+                        'value' => $value,
+                        'update_result' => $update_result
+                    ));
+                }
+                
                 $synced_count++;
             }
         }
@@ -1004,7 +1049,7 @@ class GoogleSheetsSync {
         
         // まず既存データをクリア
         gi_log_error('Clearing existing sheet data');
-        $clear_result = $this->clear_sheet_range('A:Y');
+        $clear_result = $this->clear_sheet_range('A:AE'); // 31列対応
         gi_log_error('Clear result', array('success' => $clear_result));
         
         // ヘッダーを設定
@@ -1055,7 +1100,7 @@ class GoogleSheetsSync {
                 ));
                 
                 $end_row = $current_row + count($batch_data) - 1;
-                $range = $sheet_name . "!A{$current_row}:Y{$end_row}";
+                $range = $sheet_name . "!A{$current_row}:AE{$end_row}"; // 31列対応
                 
                 $result = $this->write_sheet_data($range, $batch_data);
                 
@@ -1348,33 +1393,33 @@ class GoogleSheetsSync {
                 'description' => '助成金の申請方法'
             ),
             'R' => array(
-                'field_name' => '都道府県コード',
-                'field_key' => 'target_prefecture',
-                'type' => 'select',
-                'choices' => array(
-                    '', 'hokkaido', 'aomori', 'iwate', 'miyagi', 'akita', 'yamagata', 'fukushima',
-                    'ibaraki', 'tochigi', 'gunma', 'saitama', 'chiba', 'tokyo', 'kanagawa',
-                    'niigata', 'toyama', 'ishikawa', 'fukui', 'yamanashi', 'nagano', 'gifu',
-                    'shizuoka', 'aichi', 'mie', 'shiga', 'kyoto', 'osaka', 'hyogo', 'nara',
-                    'wakayama', 'tottori', 'shimane', 'okayama', 'hiroshima', 'yamaguchi',
-                    'tokushima', 'kagawa', 'ehime', 'kochi', 'fukuoka', 'saga', 'nagasaki',
-                    'kumamoto', 'oita', 'miyazaki', 'kagoshima', 'okinawa'
-                ),
-                'description' => '対象都道府県のコード'
-            ),
-            'U' => array(
                 'field_name' => '地域制限',
                 'field_key' => 'regional_limitation',
                 'type' => 'select',
                 'choices' => array('nationwide', 'prefecture_only', 'municipality_only', 'region_group', 'specific_area'),
                 'description' => '地域制限のタイプ'
             ),
-            'V' => array(
+            'S' => array(
                 'field_name' => '申請ステータス',
                 'field_key' => 'application_status',
                 'type' => 'select',
                 'choices' => array('open', 'upcoming', 'closed', 'suspended'),
                 'description' => '現在の募集状況'
+            ),
+            // 新規フィールドのバリデーション追加 (31列対応)
+            'AA' => array(
+                'field_name' => '採択率（%）',
+                'field_key' => 'adoption_rate',
+                'type' => 'number',
+                'validation' => array('min' => 0, 'max' => 100),
+                'description' => '採択率の数値（0-100%）'
+            ),
+            'AB' => array(
+                'field_name' => '申請難易度',
+                'field_key' => 'application_difficulty',
+                'type' => 'select',
+                'choices' => array('easy', 'normal', 'hard', 'very_hard'),
+                'description' => '申請の難易度レベル'
             )
         );
     }
