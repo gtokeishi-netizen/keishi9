@@ -80,10 +80,14 @@ function onEdit(e) {
       return;
     }
     
-    // WordPress に同期
+    // 構造化されたデータ形式に変換
+    const structuredData = convertRowDataToStructured(rowData);
+    
+    // WordPress に同期（構造化データと生データの両方を送信）
     syncRowToWordPress('row_updated', {
       row_number: rowNumber,
-      row_data: rowData,
+      row_data: rowData,              // 後方互換性のための生データ
+      structured_data: structuredData, // 新しいフィールドを含む構造化データ
       edited_range: e.range.getA1Notation(),
       old_value: e.oldValue,
       new_value: e.value
@@ -296,6 +300,61 @@ function getRowData(sheet, rowNumber) {
 }
 
 /**
+ * 行データを構造化されたオブジェクトに変換
+ * 新しいフィールドを含む完全な構造に対応
+ */
+function convertRowDataToStructured(rowData) {
+  if (!rowData || rowData.length === 0) {
+    return null;
+  }
+  
+  return {
+    // 基本情報（A-G列）
+    id: rowData[0] || '',                          // A列: ID
+    title: rowData[1] || '',                       // B列: タイトル  
+    content: rowData[2] || '',                     // C列: 内容
+    excerpt: rowData[3] || '',                     // D列: 抜粋
+    status: rowData[4] || 'draft',                 // E列: ステータス
+    created_date: rowData[5] || '',                // F列: 作成日
+    updated_date: rowData[6] || '',                // G列: 更新日
+    
+    // 助成金情報（H-K列）
+    amount_display: rowData[7] || '',              // H列: 助成金額（表示用）
+    amount_numeric: rowData[8] || '',              // I列: 助成金額（数値）
+    deadline_display: rowData[9] || '',            // J列: 申請期限（表示用）
+    deadline_date: rowData[10] || '',              // K列: 申請期限（日付）
+    
+    // 組織・申請情報（L-Q列）
+    organization: rowData[11] || '',               // L列: 実施組織
+    organization_type: rowData[12] || '',          // M列: 組織タイプ
+    target_description: rowData[13] || '',         // N列: 対象者・対象事業
+    application_method: rowData[14] || '',         // O列: 申請方法
+    contact_info: rowData[15] || '',               // P列: 問い合わせ先
+    official_url: rowData[16] || '',               // Q列: 公式URL
+    
+    // 地域・カテゴリ情報（R-W列）
+    area_restriction: rowData[17] || '',           // R列: 地域制限
+    application_status: rowData[18] || '',         // S列: 申請ステータス
+    prefecture: rowData[19] || '',                 // T列: 都道府県
+    municipality: rowData[20] || '',               // U列: 市町村
+    category: rowData[21] || '',                   // V列: カテゴリ
+    tags: rowData[22] || '',                       // W列: タグ
+    
+    // 新規追加フィールド（X-AD列）★完全連携対応
+    external_links: rowData[23] || '',             // X列: 外部リンク
+    area_notes: rowData[24] || '',                 // Y列: 地域に関する備考
+    required_documents: rowData[25] || '',         // Z列: 必要書類
+    adoption_rate: rowData[26] || '',              // AA列: 採択率（%）
+    difficulty_level: rowData[27] || '',           // AB列: 申請難易度
+    eligible_expenses: rowData[28] || '',          // AC列: 対象経費
+    subsidy_rate: rowData[29] || '',               // AD列: 補助率
+    
+    // システム情報
+    sheet_updated: rowData[30] || ''               // AE列: シート更新日
+  };
+}
+
+/**
  * シートを取得または作成
  */
 function getOrCreateSheet() {
@@ -331,14 +390,21 @@ function setupHeaders(sheet) {
     '対象者・対象事業',       // N列
     '申請方法',              // O列
     '問い合わせ先',          // P列
-    '公式URL',               // Q列
+    '公式URL',               // Q列 ★完全連携: WordPress投稿フィールド
     '地域制限',              // R列
     '申請ステータス',        // S列
     '都道府県',              // T列 ★完全連携: タクソノミーデータ
     '市町村',                // U列 ★完全連携: タクソノミーデータ
     'カテゴリ',              // V列 ★完全連携: タクソノミーデータ
     'タグ',                  // W列 ★完全連携: タクソノミーデータ
-    'シート更新日'           // X列
+    '外部リンク',            // X列 ★新規追加: WordPress投稿フィールド
+    '地域に関する備考',      // Y列 ★新規追加: WordPress投稿フィールド
+    '必要書類',              // Z列 ★新規追加: WordPress投稿フィールド
+    '採択率（%）',           // AA列 ★新規追加: WordPress投稿フィールド
+    '申請難易度',            // AB列 ★新規追加: WordPress投稿フィールド
+    '対象経費',              // AC列 ★新規追加: WordPress投稿フィールド
+    '補助率',                // AD列 ★新規追加: WordPress投稿フィールド
+    'シート更新日'           // AE列 (最後の列)
   ];
   
   // ヘッダー行を設定
@@ -457,9 +523,13 @@ function handleRowInsert(sheet, e) {
     
     // 空行でない場合のみ同期
     if (rowData.some(cell => cell !== '')) {
+      // 構造化されたデータ形式に変換
+      const structuredData = convertRowDataToStructured(rowData);
+      
       syncRowToWordPress('row_added', {
         row_number: lastRow,
-        row_data: rowData
+        row_data: rowData,              // 後方互換性のための生データ
+        structured_data: structuredData  // 新しいフィールドを含む構造化データ
       });
     }
     
@@ -1566,13 +1636,37 @@ function setupFieldValidation() {
     // U列: 市町村 (自由入力 - 完全連携対応)
     // ★バリデーションなし：カンマ区切りで複数の市町村名を入力可能
     
+    // AA列: 採択率（%）- 数値バリデーション（0-100の範囲）
+    setupNumericValidation(sheet, 'AA:AA', 0, 100, '採択率は0〜100の数値で入力してください（%は自動で付与されます）');
+    
+    // AB列: 申請難易度 - 選択肢バリデーション
+    setupDropdownValidation(sheet, 'AB:AB', [
+      '初級',        // 初級レベル
+      '中級',        // 中級レベル  
+      '上級',        // 上級レベル
+      '非常に高い'    // 非常に高いレベル
+    ]);
+    
+    // AC列: 対象経費 (自由入力)
+    // ★バリデーションなし：対象となる経費を自由に記述可能
+    
+    // AD列: 補助率 (自由入力) 
+    // ★バリデーションなし：補助率を自由に記述可能（例：1/2、50%、上限100万円など）
+    
     console.log('Field validation setup completed successfully');
     
     // セルの背景色を設定（選択肢フィールドを識別しやすくする）
-    const validationColumns = ['E', 'M', 'O', 'R', 'S'];
+    const validationColumns = ['E', 'M', 'O', 'R', 'S', 'AB']; // AB列（申請難易度）を追加
     validationColumns.forEach(column => {
       const range = sheet.getRange(`${column}1:${column}1000`);
       range.setBackground('#f0f8ff'); // 薄い青色で選択肢フィールドを区別
+    });
+    
+    // 数値バリデーションフィールドを薄いオレンジ色で区別
+    const numericColumns = ['AA']; // AA列（採択率）
+    numericColumns.forEach(column => {
+      const range = sheet.getRange(`${column}1:${column}1000`);
+      range.setBackground('#fff3e0'); // 薄いオレンジ色で数値フィールドを区別
     });
     
     // 完全連携フィールドを緑色で区別（タクソノミー連携フィールド）
@@ -1580,6 +1674,13 @@ function setupFieldValidation() {
     taxonomyColumns.forEach(column => {
       const range = sheet.getRange(`${column}1:${column}1000`);
       range.setBackground('#e8f5e8'); // 薄い緑色でタクソノミーフィールドを区別
+    });
+    
+    // 新規追加の自由入力フィールドを薄いグレー色で区別
+    const newFreeTextColumns = ['X', 'Y', 'Z', 'AC', 'AD']; // 外部リンク、地域備考、必要書類、対象経費、補助率
+    newFreeTextColumns.forEach(column => {
+      const range = sheet.getRange(`${column}1:${column}1000`);
+      range.setBackground('#f5f5f5'); // 薄いグレー色で新規自由入力フィールドを区別
     });
     
     return {
@@ -1613,6 +1714,27 @@ function setupDropdownValidation(sheet, columnRange, values) {
     
   } catch (error) {
     console.error(`Failed to set validation for ${columnRange}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * 指定の列範囲に数値バリデーションを設定
+ */
+function setupNumericValidation(sheet, columnRange, minValue, maxValue, helpText) {
+  try {
+    const range = sheet.getRange(columnRange);
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireNumberBetween(minValue, maxValue)
+      .setAllowInvalid(false)
+      .setHelpText(helpText || `${minValue}〜${maxValue}の数値を入力してください`)
+      .build();
+    
+    range.setDataValidation(rule);
+    console.log(`Numeric validation set for ${columnRange}: ${minValue}-${maxValue}`);
+    
+  } catch (error) {
+    console.error(`Failed to set numeric validation for ${columnRange}:`, error);
     throw error;
   }
 }
