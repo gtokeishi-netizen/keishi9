@@ -211,11 +211,24 @@ class SheetsAdminUI {
                         </button>
                         <p class="description">スプレッドシートの変更をWordPressに反映します。</p>
                     </div>
+                    
+                    <div class="gi-sync-option" style="border-top: 1px solid #ddd; margin-top: 15px; padding-top: 15px;">
+                        <button type="button" class="button button-secondary" id="test-specific-fields">
+                            🔍 フィールド同期テスト
+                        </button>
+                        <p class="description">都道府県・カテゴリ・対象市町村フィールドの同期状態をテストします。</p>
+                    </div>
                 </div>
                 
                 <div id="sync-result" style="display: none;">
                     <div class="notice">
                         <p id="sync-message"></p>
+                    </div>
+                </div>
+                
+                <div id="field-test-result" style="display: none;">
+                    <div class="notice">
+                        <div id="field-test-content"></div>
                     </div>
                 </div>
             </div>

@@ -33,6 +33,9 @@
         // フィールドバリデーション設定ボタン
         $('#setup-field-validation').on('click', setupFieldValidation);
         
+        // フィールド同期テストボタン
+        $('#test-specific-fields').on('click', testSpecificFields);
+        
         // コピーボタン
         $('.gi-copy-btn').on('click', handleCopyButton);
         
@@ -444,6 +447,119 @@
             complete: function() {
                 // ボタンを復元
                 $btn.prop('disabled', false).html('🔧 フィールドバリデーション設定を準備');
+            }
+        });
+    }
+    
+    /**
+     * 特定フィールドの同期テスト
+     */
+    function testSpecificFields() {
+        const $btn = $('#test-specific-fields');
+        const $result = $('#field-test-result');
+        const $content = $('#field-test-content');
+        
+        // ボタンを無効化
+        $btn.prop('disabled', true).text('🔍 テスト実行中...');
+        
+        // 結果エリアを隠す
+        $result.hide();
+        
+        $.ajax({
+            url: giSheetsAdmin.ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'gi_test_specific_fields',
+                nonce: giSheetsAdmin.nonce
+            },
+            timeout: 30000, // 30秒タイムアウト
+            success: function(response) {
+                if (response.success) {
+                    const data = response.data;
+                    let html = `
+                        <strong>🔍 フィールド同期テスト結果</strong><br>
+                        <strong>テスト対象行:</strong> ${data.total_rows}行（最初の5行をテスト）<br><br>
+                    `;
+                    
+                    if (data.test_results.length === 0) {
+                        html += '<div style="background:#fff3cd;padding:10px;border-radius:3px;margin:5px 0;">⚠️ テスト可能な投稿が見つかりませんでした。スプレッドシートにWordPress投稿IDが設定された行があることを確認してください。</div>';
+                    } else {
+                        data.test_results.forEach(function(test) {
+                            html += `
+                                <div style="border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:5px;">
+                                    <strong>📝 投稿: ${test.post_title} (ID: ${test.post_id}, 行: ${test.sheet_row})</strong><br><br>
+                                    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                                        <tr style="background:#f2f2f2;">
+                                            <th style="border:1px solid #ddd;padding:5px;">フィールド</th>
+                                            <th style="border:1px solid #ddd;padding:5px;">列</th>
+                                            <th style="border:1px solid #ddd;padding:5px;">スプレッドシート値</th>
+                                            <th style="border:1px solid #ddd;padding:5px;">WordPress値</th>
+                                            <th style="border:1px solid #ddd;padding:5px;">同期状況</th>
+                                        </tr>
+                            `;
+                            
+                            Object.keys(test.fields).forEach(function(fieldKey) {
+                                const field = test.fields[fieldKey];
+                                const statusColor = field.matches ? '#d4edda' : '#f8d7da';
+                                const statusText = field.matches ? '✅ 一致' : '❌ 不一致';
+                                
+                                html += `
+                                    <tr style="background:${statusColor};">
+                                        <td style="border:1px solid #ddd;padding:5px;">${fieldKey}</td>
+                                        <td style="border:1px solid #ddd;padding:5px;">${field.column}</td>
+                                        <td style="border:1px solid #ddd;padding:5px;">${field.sheet_value || '(空)'}</td>
+                                        <td style="border:1px solid #ddd;padding:5px;">${field.wp_value || '(空)'}</td>
+                                        <td style="border:1px solid #ddd;padding:5px;">${statusText}</td>
+                                    </tr>
+                                `;
+                            });
+                            
+                            html += '</table></div>';
+                        });
+                        
+                        // 不一致があるかチェック
+                        let hasMismatches = false;
+                        data.test_results.forEach(function(test) {
+                            Object.keys(test.fields).forEach(function(fieldKey) {
+                                if (!test.fields[fieldKey].matches) {
+                                    hasMismatches = true;
+                                }
+                            });
+                        });
+                        
+                        if (hasMismatches) {
+                            html += `
+                                <div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:3px;margin:10px 0;">
+                                    <strong>⚠️ 同期の不一致が検出されました</strong><br>
+                                    上記の表で「❌ 不一致」となっているフィールドは、スプレッドシートとWordPressで値が異なります。<br>
+                                    「Sheets → WordPress」同期を実行して修正することをお勧めします。
+                                </div>
+                            `;
+                        } else {
+                            html += `
+                                <div style="background:#d4edda;color:#155724;padding:10px;border-radius:3px;margin:10px 0;">
+                                    <strong>✅ すべてのフィールドが正常に同期されています</strong><br>
+                                    都道府県、カテゴリ、対象市町村のフィールドは正しく同期されています。
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    $content.html(html);
+                    $result.removeClass('notice-error').addClass('notice-success').show();
+                } else {
+                    $content.html('❌ フィールドテストに失敗しました: ' + (response.data || '不明なエラー'));
+                    $result.removeClass('notice-success').addClass('notice-error').show();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Field test error:', xhr, status, error);
+                $content.html('❌ フィールドテスト中にエラーが発生しました: ' + error);
+                $result.removeClass('notice-success').addClass('notice-error').show();
+            },
+            complete: function() {
+                // ボタンを復元
+                $btn.prop('disabled', false).text('🔍 フィールド同期テスト');
             }
         });
     }

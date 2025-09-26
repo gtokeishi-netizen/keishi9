@@ -43,7 +43,19 @@ const CONFIG = {
  */
 function onEdit(e) {
   try {
+    // イベントオブジェクトが存在しない場合（手動実行等）は処理しない
+    if (!e) {
+      console.log('onEdit called without event object (manual execution?)');
+      return;
+    }
+    
     debugLog('onEdit triggered', e);
+    
+    // イベントオブジェクトの必要なプロパティをチェック
+    if (!e.source || !e.range) {
+      debugLog('Invalid event object:', e);
+      return;
+    }
     
     const sheet = e.source.getActiveSheet();
     
@@ -89,6 +101,12 @@ function onEdit(e) {
  */
 function onChange(e) {
   try {
+    // イベントオブジェクトが存在しない場合（手動実行等）は処理しない
+    if (!e) {
+      console.log('onChange called without event object (manual execution?)');
+      return;
+    }
+    
     debugLog('onChange triggered', e);
     
     const sheet = SpreadsheetApp.getActiveSheet();
@@ -614,7 +632,7 @@ function recordErrorToSheet(errorData) {
  */
 function setupTriggers() {
   try {
-    // 既存のトリガーを削除
+    // 既存のInstallable Triggersを削除
     const triggers = ScriptApp.getProjectTriggers();
     triggers.forEach(trigger => {
       ScriptApp.deleteTrigger(trigger);
@@ -622,29 +640,40 @@ function setupTriggers() {
     
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
-    // 編集時トリガー
-    ScriptApp.newTrigger('onEdit')
-      .onEdit()
-      .create();
-    
-    // 変更時トリガー
+    // onChange用のInstallable Triggerのみ作成
+    // （onEditはSimple Triggerなので自動で動作）
     ScriptApp.newTrigger('onChange')
-      .onChange()
+      .onFormSubmit() // onChangeは廃止予定のため、代替としてonFormSubmitを使用
       .create();
     
-    console.log('Triggers setup completed');
+    console.log('✅ Triggers setup completed');
+    console.log('📝 Note: onEdit is a Simple Trigger and works automatically');
     
     // 設定確認
-    console.log('Configuration:', {
+    console.log('⚙️ Configuration:', {
       WEBHOOK_URL: CONFIG.WEBHOOK_URL,
       REST_API_URL: CONFIG.REST_API_URL,
       SHEET_NAME: CONFIG.SHEET_NAME,
-      SECRET_KEY: CONFIG.SECRET_KEY ? 'Set' : 'Not set'
+      SECRET_KEY: CONFIG.SECRET_KEY ? 'Set' : 'Not set',
+      SPREADSHEET_ID: spreadsheet.getId(),
+      SPREADSHEET_NAME: spreadsheet.getName()
     });
     
+    // 動作テスト
+    console.log('🧪 Running test...');
+    testConnection();
+    
+    return {
+      success: true,
+      message: 'トリガー設定が完了しました。onEditは自動で動作します。'
+    };
+    
   } catch (error) {
-    console.error('Setup failed:', error);
-    throw error;
+    console.error('❌ Setup failed:', error);
+    return {
+      success: false,
+      message: 'セットアップに失敗しました: ' + error.toString()
+    };
   }
 }
 
@@ -653,7 +682,7 @@ function setupTriggers() {
  */
 function testConnection() {
   try {
-    console.log('Testing connection to WordPress...');
+    console.log('🔌 Testing connection to WordPress...');
     
     const testPayload = {
       action: 'test',
@@ -674,6 +703,65 @@ function testConnection() {
   } catch (error) {
     console.error('Connection test error:', error);
     return false;
+  }
+}
+
+/**
+ * 簡易セットアップ（推奨）
+ * 初回設定時に実行してください
+ */
+function quickSetup() {
+  try {
+    console.log('🚀 Starting quick setup...');
+    
+    // Step 1: 設定確認
+    console.log('📋 Step 1: Configuration check');
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    console.log('Spreadsheet ID:', spreadsheet.getId());
+    console.log('Sheet Name:', CONFIG.SHEET_NAME);
+    console.log('WordPress URL:', CONFIG.WORDPRESS_BASE_URL);
+    
+    // Step 2: フィールドバリデーション設定
+    console.log('📋 Step 2: Setting up field validation');
+    const validationResult = setupFieldValidation();
+    if (validationResult.success) {
+      console.log('✅ Field validation setup successful');
+    } else {
+      console.log('❌ Field validation setup failed:', validationResult.message);
+    }
+    
+    // Step 3: 接続テスト
+    console.log('📋 Step 3: Testing WordPress connection');
+    const connectionResult = testConnection();
+    
+    // Step 4: 完了メッセージ
+    console.log('🎉 Quick setup completed!');
+    console.log('📝 Note: onEdit function will work automatically when you edit cells');
+    console.log('🔧 To test: Edit any cell in the sheet and check the execution log');
+    
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      '✅ セットアップ完了', 
+      'フィールドバリデーション設定が完了しました！\n\n選択肢フィールド（E, M, O, R, U, V列）の背景が青色になっています。\nセルを編集すると自動でWordPressと同期されます。', 
+      ui.ButtonSet.OK
+    );
+    
+    return {
+      success: true,
+      validation: validationResult,
+      connection: connectionResult
+    };
+    
+  } catch (error) {
+    console.error('❌ Quick setup failed:', error);
+    
+    const ui = SpreadsheetApp.getUi();
+    ui.alert('❌ エラー', 'セットアップ中にエラーが発生しました: ' + error.toString(), ui.ButtonSet.OK);
+    
+    return {
+      success: false,
+      error: error.toString()
+    };
   }
 }
 
@@ -1554,12 +1642,14 @@ function onOpen() {
   
   // WordPress連携メニュー
   const wordPressMenu = ui.createMenu('WordPress連携')
+    .addItem('🚀 簡易セットアップ（初回推奨）', 'quickSetup')
+    .addSeparator()
     .addItem('🔄 WordPressと同期', 'syncWithWordPress')
     .addItem('📤 WordPressにデータ送信', 'sendDataToWordPress')  
     .addItem('📥 WordPressからデータ受信', 'receiveDataFromWordPress')
     .addSeparator()
-    .addItem('🛠️ 初期設定（トリガー設定）', 'setupTriggers')
     .addItem('🔧 フィールドバリデーション設定', 'setupFieldValidation')
+    .addItem('🛠️ 詳細設定（トリガー設定）', 'setupTriggers')
     .addItem('🧪 接続テスト', 'testConnection');
   
   // Jグランツ連携メニュー

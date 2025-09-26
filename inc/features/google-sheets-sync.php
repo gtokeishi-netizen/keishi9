@@ -100,6 +100,7 @@ class GoogleSheetsSync {
         add_action('wp_ajax_gi_manual_sheets_sync', array($this, 'ajax_manual_sync'));
         add_action('wp_ajax_gi_test_sheets_connection', array($this, 'ajax_test_connection'));
         add_action('wp_ajax_gi_setup_field_validation', array($this, 'ajax_setup_field_validation'));
+        add_action('wp_ajax_gi_test_specific_fields', array($this, 'ajax_test_specific_fields'));
     }
     
     /**
@@ -824,14 +825,55 @@ class GoogleSheetsSync {
                     'application_status' => isset($row[21]) ? $row[21] : 'open',
                 );
                 
+                // 問題のあるフィールドの詳細ログ
+                gi_log_error('Syncing problematic fields', array(
+                    'post_id' => $post_id,
+                    'row_index' => $row_index,
+                    'target_prefecture_raw' => $row[17] ?? null,
+                    'prefecture_name_raw' => $row[18] ?? null,
+                    'target_municipality_raw' => $row[19] ?? null,
+                    'category_raw' => $row[22] ?? null,
+                    'target_prefecture_value' => $acf_fields['target_prefecture'],
+                    'prefecture_name_value' => $acf_fields['prefecture_name'],
+                    'target_municipality_value' => $acf_fields['target_municipality'],
+                    'row_length' => count($row)
+                ));
+                
                 foreach ($acf_fields as $field => $value) {
-                    update_field($field, $value, $post_id);
+                    $update_result = update_field($field, $value, $post_id);
+                    
+                    // 問題のあるフィールドの更新結果をログ
+                    if (in_array($field, array('target_prefecture', 'prefecture_name', 'target_municipality'))) {
+                        gi_log_error('Field update result', array(
+                            'post_id' => $post_id,
+                            'field' => $field,
+                            'value' => $value,
+                            'update_result' => $update_result,
+                            'current_value_after_update' => get_field($field, $post_id)
+                        ));
+                    }
                 }
                 
                 // カテゴリを設定
                 if (isset($row[22]) && !empty($row[22])) {
                     $categories = array_map('trim', explode(',', $row[22]));
-                    wp_set_post_terms($post_id, $categories, 'grant_category');
+                    $category_result = wp_set_post_terms($post_id, $categories, 'grant_category');
+                    
+                    // カテゴリ設定の結果をログ
+                    gi_log_error('Category sync result', array(
+                        'post_id' => $post_id,
+                        'raw_category_data' => $row[22],
+                        'categories_array' => $categories,
+                        'set_terms_result' => $category_result,
+                        'current_terms_after_update' => wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'))
+                    ));
+                } else {
+                    gi_log_error('No category data to sync', array(
+                        'post_id' => $post_id,
+                        'row_22_isset' => isset($row[22]),
+                        'row_22_empty' => empty($row[22] ?? ''),
+                        'row_22_value' => $row[22] ?? null
+                    ));
                 }
                 
                 // タグを設定
@@ -1332,6 +1374,124 @@ class GoogleSheetsSync {
                 'description' => '現在の募集状況'
             )
         );
+    }
+    
+    /**
+     * 特定フィールドのテストAJAXハンドラー
+     */
+    public function ajax_test_specific_fields() {
+        try {
+            gi_log_error('AJAX specific field test request received', array(
+                'user_id' => get_current_user_id(),
+                'post_data' => $_POST
+            ));
+            
+            // Nonce検証
+            check_ajax_referer('gi_sheets_nonce', 'nonce');
+            
+            // 権限チェック
+            if (!current_user_can('edit_posts')) {
+                gi_log_error('Permission denied for specific field test', array('user_id' => get_current_user_id()));
+                wp_send_json_error('権限がありません');
+                return;
+            }
+            
+            $results = $this->test_specific_field_sync();
+            
+            if (isset($results['error'])) {
+                wp_send_json_error($results['error']);
+            } else {
+                wp_send_json_success($results);
+            }
+            
+        } catch (Exception $e) {
+            gi_log_error('Specific field test failed', array(
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ));
+            wp_send_json_error('フィールドテストに失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 特定フィールドの同期状態をテスト
+     */
+    public function test_specific_field_sync() {
+        $sheet_data = $this->read_sheet_data();
+        
+        if ($sheet_data === false) {
+            return array('error' => 'スプレッドシートデータの読み取りに失敗しました');
+        }
+        
+        if (empty($sheet_data) || count($sheet_data) < 2) {
+            return array('error' => 'データ行が見つかりません');
+        }
+        
+        // ヘッダー行を除去
+        $headers = array_shift($sheet_data);
+        
+        $results = array(
+            'total_rows' => count($sheet_data),
+            'headers' => $headers,
+            'test_results' => array()
+        );
+        
+        // 最初の5行をテスト
+        foreach (array_slice($sheet_data, 0, 5) as $index => $row) {
+            $post_id = intval($row[0] ?? 0);
+            
+            if (!$post_id || !get_post($post_id)) {
+                continue;
+            }
+            
+            $row_result = array(
+                'post_id' => $post_id,
+                'post_title' => get_the_title($post_id),
+                'sheet_row' => $index + 2, // ヘッダーを考慮
+                'fields' => array()
+            );
+            
+            // 問題のフィールドをテスト
+            $test_fields = array(
+                'target_prefecture' => 17, // R列
+                'prefecture_name' => 18,   // S列  
+                'target_municipality' => 19, // T列
+            );
+            
+            foreach ($test_fields as $field_key => $column_index) {
+                $sheet_value = $row[$column_index] ?? '';
+                $wp_value = get_field($field_key, $post_id);
+                
+                $row_result['fields'][$field_key] = array(
+                    'column' => chr(65 + $column_index),
+                    'sheet_value' => $sheet_value,
+                    'wp_value' => $wp_value,
+                    'matches' => (string)$sheet_value === (string)$wp_value,
+                    'sheet_empty' => empty($sheet_value),
+                    'wp_empty' => empty($wp_value)
+                );
+            }
+            
+            // カテゴリテスト
+            $category_sheet = $row[22] ?? ''; // W列
+            $category_wp = wp_get_post_terms($post_id, 'grant_category', array('fields' => 'names'));
+            $category_wp_str = is_array($category_wp) ? implode(', ', $category_wp) : '';
+            
+            $row_result['fields']['grant_category'] = array(
+                'column' => 'W',
+                'sheet_value' => $category_sheet,
+                'wp_value' => $category_wp_str,
+                'matches' => $category_sheet === $category_wp_str,
+                'sheet_empty' => empty($category_sheet),
+                'wp_empty' => empty($category_wp_str)
+            );
+            
+            $results['test_results'][] = $row_result;
+        }
+        
+        return $results;
     }
     
     /**
