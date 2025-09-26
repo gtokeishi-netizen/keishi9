@@ -1432,6 +1432,221 @@ function determineApplicationStatus(startDate, endDate) {
   }
 }
 
+// =============================================================================
+// フィールドバリデーション設定機能
+// =============================================================================
+
+/**
+ * スプレッドシートの選択肢フィールドにプルダウンバリデーションを設定
+ * WordPress管理画面から呼び出されて実行される
+ */
+function setupFieldValidation() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = spreadsheet.getSheetByName(CONFIG.SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('対象シートが見つかりません: ' + CONFIG.SHEET_NAME);
+    }
+
+    console.log('Setting up field validation rules...');
+    
+    // E列: ステータス（publish/draft/private/deleted）
+    setupDropdownValidation(sheet, 'E:E', ['draft', 'publish', 'private', 'deleted']);
+    
+    // M列: 組織タイプ
+    setupDropdownValidation(sheet, 'M:M', [
+      'national',      // 国（省庁）
+      'prefecture',    // 都道府県
+      'city',         // 市区町村
+      'public_org',   // 公的機関
+      'private_org',  // 民間団体
+      'foundation',   // 財団法人
+      'jgrants',      // Jグランツ
+      'other'         // その他
+    ]);
+    
+    // O列: 申請方法
+    setupDropdownValidation(sheet, 'O:O', [
+      'online',       // オンライン申請
+      'mail',         // 郵送申請
+      'visit',        // 窓口申請
+      'mixed'         // オンライン・郵送併用
+    ]);
+    
+    // R列: 都道府県コード
+    setupDropdownValidation(sheet, 'R:R', [
+      '', 'hokkaido', 'aomori', 'iwate', 'miyagi', 'akita', 'yamagata', 'fukushima',
+      'ibaraki', 'tochigi', 'gunma', 'saitama', 'chiba', 'tokyo', 'kanagawa',
+      'niigata', 'toyama', 'ishikawa', 'fukui', 'yamanashi', 'nagano', 'gifu',
+      'shizuoka', 'aichi', 'mie', 'shiga', 'kyoto', 'osaka', 'hyogo', 'nara',
+      'wakayama', 'tottori', 'shimane', 'okayama', 'hiroshima', 'yamaguchi',
+      'tokushima', 'kagawa', 'ehime', 'kochi', 'fukuoka', 'saga', 'nagasaki',
+      'kumamoto', 'oita', 'miyazaki', 'kagoshima', 'okinawa'
+    ]);
+    
+    // U列: 地域制限
+    setupDropdownValidation(sheet, 'U:U', [
+      'nationwide',        // 全国対象
+      'prefecture_only',   // 都道府県内限定
+      'municipality_only', // 市町村限定
+      'region_group',      // 地域グループ限定
+      'specific_area'      // 特定地域限定
+    ]);
+    
+    // V列: 申請ステータス
+    setupDropdownValidation(sheet, 'V:V', [
+      'open',             // 募集中
+      'upcoming',         // 募集予定
+      'closed',           // 募集終了
+      'suspended'         // 一時停止
+    ]);
+    
+    console.log('Field validation setup completed successfully');
+    
+    // セルの背景色を設定（選択肢フィールドを識別しやすくする）
+    const validationColumns = ['E', 'M', 'O', 'R', 'U', 'V'];
+    validationColumns.forEach(column => {
+      const range = sheet.getRange(`${column}1:${column}1000`);
+      range.setBackground('#f0f8ff'); // 薄い青色で選択肢フィールドを区別
+    });
+    
+    return {
+      success: true,
+      message: 'フィールドバリデーション設定が完了しました'
+    };
+    
+  } catch (error) {
+    console.error('Field validation setup failed:', error);
+    return {
+      success: false,
+      message: 'バリデーション設定に失敗しました: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * 指定の列範囲にドロップダウンバリデーションを設定
+ */
+function setupDropdownValidation(sheet, columnRange, values) {
+  try {
+    const range = sheet.getRange(columnRange);
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(values, true) // true = 無効な値に対して警告を表示
+      .setAllowInvalid(false)
+      .setHelpText(`選択可能な値: ${values.join(', ')}`)
+      .build();
+    
+    range.setDataValidation(rule);
+    console.log(`Dropdown validation set for ${columnRange}: ${values.join(', ')}`);
+    
+  } catch (error) {
+    console.error(`Failed to set validation for ${columnRange}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * 統合メニューシステム - カスタムメニューを追加
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // WordPress連携メニュー
+  const wordPressMenu = ui.createMenu('WordPress連携')
+    .addItem('🔄 WordPressと同期', 'syncWithWordPress')
+    .addItem('📤 WordPressにデータ送信', 'sendDataToWordPress')  
+    .addItem('📥 WordPressからデータ受信', 'receiveDataFromWordPress')
+    .addSeparator()
+    .addItem('🛠️ 初期設定（トリガー設定）', 'setupTriggers')
+    .addItem('🔧 フィールドバリデーション設定', 'setupFieldValidation')
+    .addItem('🧪 接続テスト', 'testConnection');
+  
+  // Jグランツ連携メニュー
+  const jgrantsMenu = ui.createMenu('Jグランツ連携')
+    .addItem('📊 Jグランツデータ取得', 'showJgrantsImportDialog')
+    .addItem('🔄 WordPress形式で変換取得', 'importJgrantsToWordPressFormat')
+    .addSeparator()
+    .addItem('🗂️ Jグランツシート作成', 'importJgrantsSubsidyData')
+    .addItem('📋 統計データ表示', 'showJgrantsStatistics');
+    
+  // メインメニューに追加
+  ui.createMenu('🏛️ 助成金管理システム')
+    .addSubMenu(wordPressMenu)
+    .addSubMenu(jgrantsMenu)
+    .addSeparator()
+    .addItem('📚 使い方ガイド', 'showUsageGuide')
+    .addItem('ℹ️ システム情報', 'showSystemInfo')
+    .addToUi();
+}
+
+/**
+ * 使い方ガイドを表示
+ */
+function showUsageGuide() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const guide = `
+🏛️ 助成金管理システム 使い方ガイド
+
+【WordPress連携】
+• 🔄 WordPressと同期: 双方向で最新データに同期
+• 📤 WordPressにデータ送信: スプレッドシート → WordPress
+• 📥 WordPressからデータ受信: WordPress → スプレッドシート
+
+【Jグランツ連携】  
+• 📊 Jグランツデータ取得: 最新の政府系助成金を取得
+• 🔄 WordPress形式で変換取得: WordPress用に自動変換
+
+【選択肢フィールド（背景が青色）】
+• E列: ステータス (draft/publish/private/deleted)
+• M列: 組織タイプ (national/prefecture/city等)
+• O列: 申請方法 (online/mail/visit/mixed)
+• R列: 都道府県コード (tokyo/osaka等)
+• U列: 地域制限 (nationwide/prefecture_only等)
+• V列: 申請ステータス (open/closed/upcoming/suspended)
+
+【初回設定】
+1. 🛠️ 初期設定（トリガー設定）を実行
+2. 🔧 フィールドバリデーション設定を実行
+3. 🧪 接続テストで確認
+
+【サポート】
+問題が発生した場合は、システム管理者にお問い合わせください。
+  `;
+  
+  ui.alert('使い方ガイド', guide, ui.ButtonSet.OK);
+}
+
+/**
+ * システム情報を表示
+ */
+function showSystemInfo() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const info = `
+🏛️ 助成金管理システム v2.0
+
+【接続情報】
+WordPress URL: ${CONFIG.WORDPRESS_BASE_URL}
+Webhook URL: ${CONFIG.REST_API_URL}
+対象シート: ${CONFIG.SHEET_NAME}
+Secret Key: ${CONFIG.SECRET_KEY ? '設定済み' : '未設定'}
+
+【機能】
+✅ WordPress双方向同期
+✅ Jグランツ API連携
+✅ フィールドバリデーション
+✅ リアルタイム更新
+✅ 自動データ変換
+
+【最終更新】
+2024年12月 - 選択肢フィールドプルダウン対応版
+  `;
+  
+  ui.alert('システム情報', info, ui.ButtonSet.OK);
+}
+
 /**
  * タグを抽出して生成
  */

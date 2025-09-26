@@ -99,6 +99,7 @@ class GoogleSheetsSync {
         // AJAX ハンドラー
         add_action('wp_ajax_gi_manual_sheets_sync', array($this, 'ajax_manual_sync'));
         add_action('wp_ajax_gi_test_sheets_connection', array($this, 'ajax_test_connection'));
+        add_action('wp_ajax_gi_setup_field_validation', array($this, 'ajax_setup_field_validation'));
     }
     
     /**
@@ -286,14 +287,22 @@ class GoogleSheetsSync {
      * スプレッドシートからデータを読み取り
      */
     public function read_sheet_data($range = null) {
+        gi_log_error('Starting read_sheet_data', array('requested_range' => $range));
+        
         $access_token = $this->get_access_token();
         if (!$access_token) {
+            gi_log_error('read_sheet_data: No access token available');
             return false;
         }
         
         if (!$range) {
-            $range = $this->sheet_name . '!A:Y'; // 全データを取得（Y列まで）
+            $range = $this->get_sheet_name() . '!A:Y'; // 全データを取得（Y列まで）
         }
+        
+        gi_log_error('Reading from sheets', array(
+            'range' => $range,
+            'spreadsheet_id' => $this->spreadsheet_id
+        ));
         
         $url = self::SHEETS_API_URL . $this->spreadsheet_id . '/values/' . urlencode($range);
         
@@ -306,16 +315,47 @@ class GoogleSheetsSync {
         ));
         
         if (is_wp_error($response)) {
-            gi_log_error('Sheets Read Failed', array(
-                'error' => $response->get_error_message()
+            gi_log_error('Sheets Read Request Failed', array(
+                'error' => $response->get_error_message(),
+                'url' => $url
             ));
             return false;
         }
         
+        $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+        
+        gi_log_error('Sheets read response', array(
+            'response_code' => $response_code,
+            'body_length' => strlen($body)
+        ));
+        
+        if ($response_code !== 200) {
+            gi_log_error('Sheets Read Failed - Bad Response Code', array(
+                'response_code' => $response_code,
+                'response_body' => $body
+            ));
+            return false;
+        }
+        
         $data = json_decode($body, true);
         
-        return isset($data['values']) ? $data['values'] : array();
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            gi_log_error('JSON decode failed', array(
+                'json_error' => json_last_error_msg(),
+                'response_body' => $body
+            ));
+            return false;
+        }
+        
+        $values = isset($data['values']) ? $data['values'] : array();
+        
+        gi_log_error('Read sheet data completed', array(
+            'rows_count' => count($values),
+            'first_row_columns' => !empty($values) ? count($values[0]) : 0
+        ));
+        
+        return $values;
     }
     
     /**
@@ -516,31 +556,31 @@ class GoogleSheetsSync {
             gi_log_error('Setting up sheet headers');
             
             $headers = array(
-                'ID',                    // A列
-                'タイトル',               // B列
-                '内容',                  // C列
-                '抜粋',                  // D列
-                'ステータス',             // E列
-                '作成日',                // F列
-                '更新日',                // G列
-                '助成金額（表示用）',      // H列
-                '助成金額（数値）',        // I列
-                '申請期限（表示用）',      // J列
-                '申請期限（日付）',        // K列
-                '実施組織',              // L列
-                '組織タイプ',            // M列
-                '対象者・対象事業',       // N列
-                '申請方法',              // O列
-                '問い合わせ先',          // P列
-                '公式URL',               // Q列
-                '都道府県コード',        // R列
-                '都道府県名',            // S列
-                '対象市町村',            // T列
-                '地域制限',              // U列
-                '申請ステータス',        // V列
-                'カテゴリ',              // W列
-                'タグ',                  // X列
-                'シート更新日'           // Y列
+                'ID (自動入力)',                          // A列 - WordPress投稿ID
+                'タイトル',                               // B列 - 助成金名
+                '内容・詳細',                            // C列 - 助成金の詳細説明
+                '抜粋・概要',                            // D列 - 簡単な概要
+                'ステータス (draft/publish/private)',     // E列 - 投稿ステータス
+                '作成日 (自動入力)',                      // F列 - WordPress作成日
+                '更新日 (自動入力)',                      // G列 - WordPress更新日
+                '助成金額 (例: 300万円)',                 // H列 - 表示用金額
+                '助成金額数値 (例: 3000000)',             // I列 - ソート用数値
+                '申請期限 (例: 令和6年3月31日)',          // J列 - 表示用期限
+                '申請期限日付 (YYYY-MM-DD)',             // K列 - ソート用日付
+                '実施組織名',                            // L列 - 実施する組織名
+                '組織タイプ (national/prefecture/city/public_org/private_org/other)', // M列 - 組織分類
+                '対象者・対象事業',                      // N列 - 助成対象の詳細
+                '申請方法 (online/mail/visit/mixed)',     // O列 - 申請方法
+                '問い合わせ先',                          // P列 - 連絡先情報
+                '公式URL',                               // Q列 - 公式サイトURL
+                '都道府県コード (hokkaido/tokyo等)',      // R列 - 地域コード
+                '都道府県名 (自動入力)',                  // S列 - 地域名
+                '対象市町村',                            // T列 - 対象市町村
+                '地域制限 (nationwide/prefecture_only/municipality_only/region_group/specific_area)', // U列 - 地域制限タイプ
+                '申請ステータス (open/upcoming/closed/suspended)', // V列 - 募集状況
+                'カテゴリ',                              // W列 - 分類カテゴリ
+                'タグ',                                  // X列 - タグ
+                'シート更新日 (自動入力)'                // Y列 - 最終同期日時
             );
             
             gi_log_error('Headers array created', array('count' => count($headers)));
@@ -688,20 +728,28 @@ class GoogleSheetsSync {
      * スプレッドシートからWordPressへの同期
      */
     public function sync_sheets_to_wp() {
-        $sheet_data = $this->read_sheet_data();
-        if (empty($sheet_data)) {
-            return false;
-        }
+        try {
+            gi_log_error('Starting sync_sheets_to_wp');
+            
+            $sheet_data = $this->read_sheet_data();
+            if (empty($sheet_data)) {
+                gi_log_error('No sheet data found');
+                return 0;
+            }
+            
+            gi_log_error('Sheet data retrieved', array('row_count' => count($sheet_data)));
+            
+            $headers = array_shift($sheet_data); // ヘッダー行を除去
+            $synced_count = 0;
+            $new_post_ids_to_update = array(); // 新規作成された投稿のIDと行番号を記録
         
-        $headers = array_shift($sheet_data); // ヘッダー行を除去
-        $synced_count = 0;
-        
-        foreach ($sheet_data as $row) {
+        foreach ($sheet_data as $row_index => $row) {
             if (empty($row) || count($row) < 5) {
                 continue; // 不完全な行をスキップ
             }
             
-            $post_id = intval($row[0]);
+            $original_post_id = intval($row[0]); // 元のpost_id（空の場合は0）
+            $post_id = $original_post_id;
             $title = isset($row[1]) ? sanitize_text_field($row[1]) : '';
             $content = isset($row[2]) ? wp_kses_post($row[2]) : '';
             $excerpt = isset($row[3]) ? sanitize_textarea_field($row[3]) : '';
@@ -716,6 +764,8 @@ class GoogleSheetsSync {
                 continue;
             }
             
+            $was_new_post = false; // 新規投稿かどうかのフラグ
+            
             // 既存投稿の更新または新規作成
             if ($post_id && get_post($post_id)) {
                 // 既存投稿を更新
@@ -728,6 +778,7 @@ class GoogleSheetsSync {
                 );
                 
                 wp_update_post($updated_post);
+                gi_log_error('Updated existing post', array('post_id' => $post_id, 'title' => $title));
             } else {
                 // 新規投稿を作成
                 $new_post = array(
@@ -739,9 +790,21 @@ class GoogleSheetsSync {
                 );
                 
                 $post_id = wp_insert_post($new_post);
+                $was_new_post = true;
+                
+                if ($post_id && !is_wp_error($post_id)) {
+                    // 新規投稿が作成されたので、後でスプレッドシートのA列を更新する必要がある
+                    $sheet_row_number = $row_index + 2; // ヘッダー行を考慮して+2（配列は0ベース、Sheetsは1ベース+ヘッダー）
+                    $new_post_ids_to_update[$sheet_row_number] = $post_id;
+                    gi_log_error('Created new post, will update spreadsheet', array(
+                        'post_id' => $post_id, 
+                        'title' => $title, 
+                        'sheet_row' => $sheet_row_number
+                    ));
+                }
             }
             
-            if ($post_id) {
+            if ($post_id && !is_wp_error($post_id)) {
                 // ACFフィールドを更新
                 $acf_fields = array(
                     'max_amount' => isset($row[7]) ? $row[7] : '',
@@ -781,23 +844,97 @@ class GoogleSheetsSync {
             }
         }
         
+        // 新規作成された投稿のIDをスプレッドシートに書き戻し
+        if (!empty($new_post_ids_to_update)) {
+            gi_log_error('Updating spreadsheet with new post IDs', array('count' => count($new_post_ids_to_update)));
+            
+            foreach ($new_post_ids_to_update as $sheet_row => $new_post_id) {
+                try {
+                    // A列（post_id列）のみを更新
+                    $range = $this->get_sheet_name() . '!A' . $sheet_row;
+                    $success = $this->write_sheet_data($range, array(array($new_post_id)));
+                    
+                    if ($success) {
+                        gi_log_error('Updated post ID in spreadsheet', array(
+                            'post_id' => $new_post_id, 
+                            'row' => $sheet_row, 
+                            'range' => $range
+                        ));
+                    } else {
+                        gi_log_error('Failed to update post ID in spreadsheet', array(
+                            'post_id' => $new_post_id, 
+                            'row' => $sheet_row
+                        ));
+                    }
+                } catch (Exception $e) {
+                    gi_log_error('Exception while updating post ID in spreadsheet', array(
+                        'post_id' => $new_post_id,
+                        'row' => $sheet_row,
+                        'error' => $e->getMessage()
+                    ));
+                }
+            }
+        }
+        
+        gi_log_error('sync_sheets_to_wp completed', array(
+            'synced_count' => $synced_count,
+            'new_posts_updated' => count($new_post_ids_to_update)
+        ));
         return $synced_count;
+        
+        } catch (Exception $e) {
+            gi_log_error('sync_sheets_to_wp failed', array(
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ));
+            throw $e;
+        }
     }
     
     /**
      * 完全双方向同期
      */
     public function full_bidirectional_sync() {
-        // まず、スプレッドシートからWordPressに同期
-        $sheets_synced = $this->sync_sheets_to_wp();
+        gi_log_error('Starting full bidirectional sync');
         
-        // 次に、WordPressからスプレッドシートに同期
-        $this->sync_all_posts_to_sheets();
-        
-        gi_log_error('Full bidirectional sync completed', array(
-            'sheets_to_wp' => $sheets_synced,
-            'wp_to_sheets' => 'completed'
-        ));
+        try {
+            // Step 1: スプレッドシートからWordPressに同期（既存データの更新）
+            gi_log_error('Step 1: Sheets to WordPress sync');
+            $sheets_synced = 0;
+            try {
+                $sheets_synced = $this->sync_sheets_to_wp();
+                gi_log_error('Sheets to WP sync completed', array('sheets_synced' => $sheets_synced));
+            } catch (Exception $e) {
+                gi_log_error('Sheets to WP sync failed, continuing with WP to Sheets', array(
+                    'error' => $e->getMessage()
+                ));
+                // スプレッドシート→WordPress同期が失敗しても、WordPress→スプレッドシート同期は実行
+            }
+            
+            // Step 2: WordPressからスプレッドシートに同期（新規データの追加）
+            gi_log_error('Step 2: WordPress to Sheets sync');
+            $wp_synced = $this->sync_all_posts_to_sheets();
+            
+            gi_log_error('Full bidirectional sync completed', array(
+                'sheets_to_wp' => $sheets_synced,
+                'wp_to_sheets' => $wp_synced
+            ));
+            
+            return array(
+                'sheets_to_wp' => $sheets_synced,
+                'wp_to_sheets' => $wp_synced,
+                'total_synced' => $sheets_synced + $wp_synced
+            );
+            
+        } catch (Exception $e) {
+            gi_log_error('Full bidirectional sync failed', array(
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ));
+            throw $e;
+        }
     }
     
     /**
@@ -806,12 +943,11 @@ class GoogleSheetsSync {
     public function sync_all_posts_to_sheets() {
         gi_log_error('Starting sync_all_posts_to_sheets');
         
-        // バッチサイズを制限（一度に20件まで）
-        $batch_size = 20;
+        // 全件取得（バッチ処理で分割して同期）
         $posts = get_posts(array(
             'post_type' => 'grant',
             'post_status' => array('publish', 'draft', 'private'),
-            'numberposts' => $batch_size
+            'numberposts' => -1
         ));
         
         gi_log_error('Found posts to sync', array('count' => count($posts)));
@@ -820,6 +956,11 @@ class GoogleSheetsSync {
             gi_log_error('No posts found to sync');
             return 0;
         }
+        
+        // まず既存データをクリア
+        gi_log_error('Clearing existing sheet data');
+        $clear_result = $this->clear_sheet_range('A:Y');
+        gi_log_error('Clear result', array('success' => $clear_result));
         
         // ヘッダーを設定
         gi_log_error('Setting up sheet headers');
@@ -830,14 +971,18 @@ class GoogleSheetsSync {
             throw new Exception('ヘッダーの設定に失敗しました');
         }
         
-        // 一括でデータを準備
-        $batch_data = array();
+        // バッチサイズを設定（Google Sheets APIの制限を考慮）
+        $batch_size = 100; // 一度に100件まで
+        $total_synced = 0;
+        $all_data = array();
+        
+        // 全データを準備
         foreach ($posts as $post) {
             try {
                 gi_log_error('Preparing post data', array('post_id' => $post->ID, 'title' => $post->post_title));
                 $row_data = $this->convert_post_to_sheet_row($post->ID);
                 if ($row_data) {
-                    $batch_data[] = $row_data;
+                    $all_data[] = $row_data;
                 }
             } catch (Exception $e) {
                 gi_log_error('Failed to prepare individual post', array(
@@ -849,23 +994,46 @@ class GoogleSheetsSync {
             }
         }
         
-        // 一括でスプレッドシートに書き込み
-        if (!empty($batch_data)) {
-            gi_log_error('Writing batch data to sheets', array('batch_count' => count($batch_data)));
-            
+        gi_log_error('Prepared all data', array('total_posts' => count($all_data)));
+        
+        // バッチごとに分割して書き込み
+        if (!empty($all_data)) {
+            $batches = array_chunk($all_data, $batch_size);
             $sheet_name = $this->get_sheet_name();
-            $start_row = 2; // ヘッダー行の次から
-            $end_row = $start_row + count($batch_data) - 1;
-            $range = $sheet_name . "!A{$start_row}:Y{$end_row}";
+            $current_row = 2; // ヘッダー行の次から
             
-            $result = $this->write_sheet_data($range, $batch_data);
-            
-            if ($result) {
-                gi_log_error('Batch write successful', array('synced_count' => count($batch_data)));
-                return count($batch_data);
-            } else {
-                throw new Exception('一括書き込みに失敗しました');
+            foreach ($batches as $batch_index => $batch_data) {
+                gi_log_error('Processing batch', array(
+                    'batch_index' => $batch_index + 1,
+                    'batch_size' => count($batch_data),
+                    'start_row' => $current_row
+                ));
+                
+                $end_row = $current_row + count($batch_data) - 1;
+                $range = $sheet_name . "!A{$current_row}:Y{$end_row}";
+                
+                $result = $this->write_sheet_data($range, $batch_data);
+                
+                if ($result) {
+                    $total_synced += count($batch_data);
+                    $current_row = $end_row + 1;
+                    gi_log_error('Batch write successful', array(
+                        'batch_synced' => count($batch_data),
+                        'total_synced' => $total_synced
+                    ));
+                } else {
+                    gi_log_error('Batch write failed', array('batch_index' => $batch_index + 1));
+                    throw new Exception("バッチ " . ($batch_index + 1) . " の書き込みに失敗しました");
+                }
+                
+                // API制限を考慮して少し待機
+                if (count($batches) > 1 && $batch_index < count($batches) - 1) {
+                    sleep(1);
+                }
             }
+            
+            gi_log_error('All batches completed', array('total_synced' => $total_synced));
+            return $total_synced;
         }
         
         gi_log_error('No data to sync');
@@ -931,8 +1099,8 @@ class GoogleSheetsSync {
                 case 'both':
                 default:
                     gi_log_error('Starting bidirectional sync');
-                    $this->full_bidirectional_sync();
-                    $message = '双方向同期が完了しました。';
+                    $result = $this->full_bidirectional_sync();
+                    $message = "双方向同期が完了しました。Sheets→WP: {$result['sheets_to_wp']}件、WP→Sheets: {$result['wp_to_sheets']}件";
                     break;
             }
             
@@ -1048,6 +1216,122 @@ class GoogleSheetsSync {
         
         gi_log_error('Sheet range cleared successfully', array('range' => $range));
         return true;
+    }
+    
+    /**
+     * フィールドバリデーション設定のAJAXハンドラー
+     */
+    public function ajax_setup_field_validation() {
+        // タイムアウトとメモリ制限の拡張
+        set_time_limit(300); // 5分
+        ini_set('memory_limit', '256M');
+        
+        try {
+            gi_log_error('AJAX field validation setup request received', array(
+                'user_id' => get_current_user_id(),
+                'post_data' => $_POST
+            ));
+            
+            // Nonce検証
+            check_ajax_referer('gi_sheets_nonce', 'nonce');
+            
+            // 権限チェック
+            if (!current_user_can('edit_posts')) {
+                gi_log_error('Permission denied for field validation setup', array('user_id' => get_current_user_id()));
+                wp_send_json_error('権限がありません');
+                return;
+            }
+            
+            gi_log_error('Setting up field validation through WordPress API');
+            
+            // Google Apps Scriptの設定関数を呼び出すための情報を提供
+            $validation_info = array(
+                'spreadsheet_id' => $this->spreadsheet_id,
+                'sheet_name' => $this->sheet_name,
+                'field_mappings' => $this->get_field_validation_mappings(),
+                'instructions' => array(
+                    'step1' => 'スプレッドシートを開いてください',
+                    'step2' => 'メニューから「🏛️ 助成金管理システム」→「WordPress連携」→「🔧 フィールドバリデーション設定」を選択',
+                    'step3' => '設定が完了すると選択肢フィールドが青色の背景で表示されます',
+                    'step4' => 'プルダウンから正しい値を選択できるようになります'
+                )
+            );
+            
+            gi_log_error('Field validation info prepared', array('mappings_count' => count($validation_info['field_mappings'])));
+            
+            wp_send_json_success(array(
+                'message' => 'フィールドバリデーション設定の情報を準備しました。Google Apps Scriptでの設定が必要です。',
+                'validation_info' => $validation_info,
+                'next_steps' => $validation_info['instructions']
+            ));
+            
+        } catch (Exception $e) {
+            gi_log_error('Field validation setup failed', array(
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ));
+            wp_send_json_error('フィールドバリデーション設定に失敗しました: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * フィールドバリデーション用のマッピング情報を取得
+     */
+    private function get_field_validation_mappings() {
+        return array(
+            'E' => array(
+                'field_name' => 'ステータス',
+                'field_key' => 'post_status',
+                'type' => 'select',
+                'choices' => array('draft', 'publish', 'private', 'deleted'),
+                'description' => 'WordPressの投稿ステータス'
+            ),
+            'M' => array(
+                'field_name' => '組織タイプ',
+                'field_key' => 'organization_type', 
+                'type' => 'select',
+                'choices' => array('national', 'prefecture', 'city', 'public_org', 'private_org', 'foundation', 'jgrants', 'other'),
+                'description' => '実施組織の分類'
+            ),
+            'O' => array(
+                'field_name' => '申請方法',
+                'field_key' => 'application_method',
+                'type' => 'select', 
+                'choices' => array('online', 'mail', 'visit', 'mixed'),
+                'description' => '助成金の申請方法'
+            ),
+            'R' => array(
+                'field_name' => '都道府県コード',
+                'field_key' => 'target_prefecture',
+                'type' => 'select',
+                'choices' => array(
+                    '', 'hokkaido', 'aomori', 'iwate', 'miyagi', 'akita', 'yamagata', 'fukushima',
+                    'ibaraki', 'tochigi', 'gunma', 'saitama', 'chiba', 'tokyo', 'kanagawa',
+                    'niigata', 'toyama', 'ishikawa', 'fukui', 'yamanashi', 'nagano', 'gifu',
+                    'shizuoka', 'aichi', 'mie', 'shiga', 'kyoto', 'osaka', 'hyogo', 'nara',
+                    'wakayama', 'tottori', 'shimane', 'okayama', 'hiroshima', 'yamaguchi',
+                    'tokushima', 'kagawa', 'ehime', 'kochi', 'fukuoka', 'saga', 'nagasaki',
+                    'kumamoto', 'oita', 'miyazaki', 'kagoshima', 'okinawa'
+                ),
+                'description' => '対象都道府県のコード'
+            ),
+            'U' => array(
+                'field_name' => '地域制限',
+                'field_key' => 'regional_limitation',
+                'type' => 'select',
+                'choices' => array('nationwide', 'prefecture_only', 'municipality_only', 'region_group', 'specific_area'),
+                'description' => '地域制限のタイプ'
+            ),
+            'V' => array(
+                'field_name' => '申請ステータス',
+                'field_key' => 'application_status',
+                'type' => 'select',
+                'choices' => array('open', 'upcoming', 'closed', 'suspended'),
+                'description' => '現在の募集状況'
+            )
+        );
     }
     
     /**

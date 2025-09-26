@@ -30,6 +30,9 @@
         $('#export-all-posts').on('click', exportAllPosts);
         $('#clear-sheet').on('click', clearSheet);
         
+        // フィールドバリデーション設定ボタン
+        $('#setup-field-validation').on('click', setupFieldValidation);
+        
         // コピーボタン
         $('.gi-copy-btn').on('click', handleCopyButton);
         
@@ -393,6 +396,56 @@
                 $btn.text(originalText).removeClass('gi-copied');
             }, 2000);
         }
+    }
+    
+    /**
+     * フィールドバリデーション設定
+     */
+    function setupFieldValidation() {
+        const $btn = $('#setup-field-validation');
+        const $result = $('#validation-result');
+        const $message = $('#validation-message');
+        
+        // ボタンを無効化
+        $btn.prop('disabled', true).html('🔧 設定準備中...');
+        
+        // 結果エリアを隠す
+        $result.hide();
+        
+        $.ajax({
+            url: giSheetsAdmin.ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'gi_setup_field_validation',
+                nonce: giSheetsAdmin.nonce
+            },
+            timeout: 60000, // 60秒タイムアウト
+            success: function(response) {
+                if (response.success) {
+                    $message.html(`
+                        <strong>✅ フィールドバリデーション情報の準備が完了しました</strong><br>
+                        ${response.data.message}<br><br>
+                        <strong>📋 次の手順でスプレッドシートにプルダウンを設定してください：</strong><br>
+                        ${Object.values(response.data.next_steps).map((step, index) => `${index + 1}. ${step}`).join('<br>')}
+                        <br><br>
+                        <em>設定後は、選択肢フィールド（E、M、O、R、U、V列）の背景が薄い青色になり、プルダウンメニューから正しい値を選択できるようになります。</em>
+                    `);
+                    $result.removeClass('notice-error notice-warning').addClass('notice-success').show();
+                } else {
+                    $message.html('❌ フィールドバリデーション設定の準備に失敗しました: ' + (response.data || '不明なエラー'));
+                    $result.removeClass('notice-success notice-warning').addClass('notice-error').show();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Field validation setup error:', xhr, status, error);
+                $message.html('❌ フィールドバリデーション設定中にエラーが発生しました: ' + error);
+                $result.removeClass('notice-success notice-warning').addClass('notice-error').show();
+            },
+            complete: function() {
+                // ボタンを復元
+                $btn.prop('disabled', false).html('🔧 フィールドバリデーション設定を準備');
+            }
+        });
     }
     
     /**

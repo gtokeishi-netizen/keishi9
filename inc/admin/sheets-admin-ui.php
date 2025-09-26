@@ -241,6 +241,91 @@ class SheetsAdminUI {
                 </div>
             </div>
             
+            <!-- フィールドバリデーション設定カード -->
+            <div class="gi-sheets-card">
+                <h2>📋 フィールドマッピング & バリデーション設定</h2>
+                <div class="gi-validation-info">
+                    <p class="description">
+                        スプレッドシートの選択肢フィールドにプルダウンメニューを設定して、入力ミスを防ぎます。<br>
+                        英語のフィールド名に対応する日本語説明も表示されます。
+                    </p>
+                    
+                    <div class="gi-field-mapping">
+                        <h4>📊 フィールドマッピング一覧</h4>
+                        <table class="widefat" style="margin: 10px 0;">
+                            <thead>
+                                <tr>
+                                    <th>列</th>
+                                    <th>フィールド名（日本語）</th>
+                                    <th>英語キー</th>
+                                    <th>選択肢・説明</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>E列</strong></td>
+                                    <td>ステータス</td>
+                                    <td><code>post_status</code></td>
+                                    <td>draft（下書き）/ publish（公開）/ private（非公開）/ deleted（削除）</td>
+                                </tr>
+                                <tr style="background: #f9f9f9;">
+                                    <td><strong>M列</strong></td>
+                                    <td>組織タイプ</td>
+                                    <td><code>organization_type</code></td>
+                                    <td>national（国・省庁）/ prefecture（都道府県）/ city（市区町村）/ public_org（公的機関）/ private_org（民間団体）/ foundation（財団法人）/ jgrants（Jグランツ）/ other（その他）</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>O列</strong></td>
+                                    <td>申請方法</td>
+                                    <td><code>application_method</code></td>
+                                    <td>online（オンライン申請）/ mail（郵送申請）/ visit（窓口申請）/ mixed（オンライン・郵送併用）</td>
+                                </tr>
+                                <tr style="background: #f9f9f9;">
+                                    <td><strong>R列</strong></td>
+                                    <td>都道府県コード</td>
+                                    <td><code>target_prefecture</code></td>
+                                    <td>tokyo（東京都）/ osaka（大阪府）/ hokkaido（北海道）等、全47都道府県のコード</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>U列</strong></td>
+                                    <td>地域制限</td>
+                                    <td><code>regional_limitation</code></td>
+                                    <td>nationwide（全国対象）/ prefecture_only（都道府県内限定）/ municipality_only（市町村限定）/ region_group（地域グループ限定）/ specific_area（特定地域限定）</td>
+                                </tr>
+                                <tr style="background: #f9f9f9;">
+                                    <td><strong>V列</strong></td>
+                                    <td>申請ステータス</td>
+                                    <td><code>application_status</code></td>
+                                    <td>open（募集中）/ upcoming（募集予定）/ closed（募集終了）/ suspended（一時停止）</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="gi-validation-setup">
+                        <h4>🔧 プルダウン設定手順</h4>
+                        <ol>
+                            <li><strong>Step 1:</strong> 下のボタンでバリデーション情報を準備</li>
+                            <li><strong>Step 2:</strong> Googleスプレッドシートを開く</li>
+                            <li><strong>Step 3:</strong> メニューから「🏛️ 助成金管理システム」→「WordPress連携」→「🔧 フィールドバリデーション設定」を選択</li>
+                            <li><strong>Step 4:</strong> 選択肢フィールドの背景が薄い青色になり、プルダウンメニューが使用可能になります</li>
+                        </ol>
+                        
+                        <div style="margin: 15px 0;">
+                            <button type="button" id="setup-field-validation" class="button button-primary">
+                                🔧 フィールドバリデーション設定を準備
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="validation-result" style="display: none;">
+                    <div class="notice">
+                        <p id="validation-message"></p>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Webhook設定カード -->
             <div class="gi-sheets-card">
                 <h2>リアルタイム同期（Webhook）</h2>
