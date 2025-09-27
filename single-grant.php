@@ -18,40 +18,44 @@ if (!have_posts()) {
 the_post();
 $post_id = get_the_ID();
 
-// Comprehensive ACF field retrieval
+// 📋 完全31列対応 ACFフィールド取得
 $grant_data = array(
-    // 基本情報
+    // 基本情報 (A-G列)
     'organization' => get_field('organization', $post_id) ?: '',
     'organization_type' => get_field('organization_type', $post_id) ?: '',
     
-    // 金額情報
+    // 金額情報 (H-I列)
     'max_amount' => get_field('max_amount', $post_id) ?: '',
     'max_amount_numeric' => intval(get_field('max_amount_numeric', $post_id)),
     'min_amount' => intval(get_field('min_amount', $post_id)),
-    'subsidy_rate' => get_field('subsidy_rate', $post_id) ?: '',
     'amount_note' => get_field('amount_note', $post_id) ?: '',
     
-    // 期間・締切情報
+    // 期間・締切情報 (J-K列)
     'deadline' => get_field('deadline', $post_id) ?: '',
     'deadline_date' => get_field('deadline_date', $post_id) ?: '',
     'application_period' => get_field('application_period', $post_id) ?: '',
     'deadline_note' => get_field('deadline_note', $post_id) ?: '',
-    'application_status' => get_field('application_status', $post_id) ?: 'open',
     
-    // 対象・条件
+    // 申請・組織情報 (L-Q列)
     'grant_target' => get_field('grant_target', $post_id) ?: '',
-    'eligible_expenses' => get_field('eligible_expenses', $post_id) ?: '',
-    'grant_difficulty' => get_field('grant_difficulty', $post_id) ?: 'normal',
-    'grant_success_rate' => intval(get_field('grant_success_rate', $post_id)),
-    'required_documents' => get_field('required_documents', $post_id) ?: '',
-    
-    // 申請・連絡先
     'application_method' => get_field('application_method', $post_id) ?: '',
     'contact_info' => get_field('contact_info', $post_id) ?: '',
     'official_url' => get_field('official_url', $post_id) ?: '',
-    'external_link' => get_field('external_link', $post_id) ?: '',
     
-    // 管理設定
+    // 地域・ステータス情報 (R-S列)
+    'regional_limitation' => get_field('regional_limitation', $post_id) ?: '',
+    'application_status' => get_field('application_status', $post_id) ?: 'open',
+    
+    // ★ 新規拡張フィールド (X-AD列) - 31列対応
+    'external_link' => get_field('external_link', $post_id) ?: '',           // X列
+    'region_notes' => get_field('region_notes', $post_id) ?: '',            // Y列
+    'required_documents' => get_field('required_documents', $post_id) ?: '', // Z列
+    'adoption_rate' => floatval(get_field('adoption_rate', $post_id)),       // AA列
+    'application_difficulty' => get_field('application_difficulty', $post_id) ?: 'normal', // AB列
+    'target_expenses' => get_field('target_expenses', $post_id) ?: '',       // AC列
+    'subsidy_rate' => get_field('subsidy_rate', $post_id) ?: '',            // AD列
+    
+    // 管理・統計情報
     'is_featured' => get_field('is_featured', $post_id) ?: false,
     'views_count' => intval(get_field('views_count', $post_id)),
     'last_updated' => get_field('last_updated', $post_id) ?: '',
@@ -133,14 +137,14 @@ if ($grant_data['deadline_date']) {
     $deadline_info = $grant_data['deadline'];
 }
 
-// Difficulty configuration
+// 📊 申請難易度設定 (31列対応 - AB列)
 $difficulty_configs = array(
-    'easy' => array('label' => '易しい', 'dots' => 1),
-    'normal' => array('label' => '普通', 'dots' => 2),
-    'hard' => array('label' => '難しい', 'dots' => 3),
-    'expert' => array('label' => '専門的', 'dots' => 4)
+    'easy' => array('label' => '簡単', 'dots' => 1, 'emoji' => '🟢'),
+    'normal' => array('label' => '普通', 'dots' => 2, 'emoji' => '🟡'),
+    'hard' => array('label' => '難しい', 'dots' => 3, 'emoji' => '🟠'),
+    'very_hard' => array('label' => '非常に困難', 'dots' => 4, 'emoji' => '🔴')
 );
-$difficulty = $grant_data['grant_difficulty'];
+$difficulty = $grant_data['application_difficulty'];
 $difficulty_data = $difficulty_configs[$difficulty] ?? $difficulty_configs['normal'];
 
 // Status mapping
@@ -228,7 +232,7 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
     box-sizing: border-box;
 }
 
-/* Main container with photo-like styling */
+/* 📋 31列対応メインコンテナ - フォトライクスタイリング */
 .grant-stylish {
     max-width: 1200px;
     margin: 0 auto;
@@ -238,6 +242,22 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
     line-height: 1.6;
     color: var(--mono-charcoal);
     position: relative;
+}
+
+/* 新規フィールド専用スタイル */
+.field-enhanced {
+    background: linear-gradient(135deg, var(--mono-off-white) 0%, var(--mono-white) 100%);
+    border-left: 4px solid var(--accent-info);
+    padding: var(--space-5);
+    border-radius: var(--radius-base);
+    margin: var(--space-4) 0;
+}
+
+.difficulty-enhanced {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-weight: 600;
 }
 
 @media (min-width: 768px) {
@@ -846,11 +866,11 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
             </div>
             <?php endif; ?>
             
-            <?php if ($grant_data['grant_success_rate'] > 0): ?>
+            <?php if ($grant_data['adoption_rate'] > 0): ?>
             <div class="info-card">
                 <div class="info-icon">📊</div>
                 <div class="info-label">採択率</div>
-                <div class="info-value"><?php echo $grant_data['grant_success_rate']; ?>%</div>
+                <div class="info-value"><?php echo number_format($grant_data['adoption_rate'], 1); ?>%</div>
             </div>
             <?php endif; ?>
             
@@ -927,11 +947,23 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
                         </tr>
                         <?php endif; ?>
                         
-                        <?php if ($difficulty !== 'normal'): ?>
+                        <?php if ($grant_data['adoption_rate'] > 0): ?>
+                        <tr>
+                            <th>採択率</th>
+                            <td>
+                                <strong><?php echo number_format($grant_data['adoption_rate'], 1); ?>%</strong>
+                                <div class="progress-bar" style="margin-top: var(--space-2);">
+                                    <div class="progress-fill" style="width: <?php echo min($grant_data['adoption_rate'], 100); ?>%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
+                        
                         <tr>
                             <th>申請難易度</th>
                             <td>
                                 <div class="difficulty-indicator">
+                                    <span style="margin-right: var(--space-2);"><?php echo $difficulty_data['emoji']; ?></span>
                                     <?php echo $difficulty_data['label']; ?>
                                     <div class="difficulty-dots">
                                         <?php for ($i = 1; $i <= 4; $i++): ?>
@@ -941,7 +973,6 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
                                 </div>
                             </td>
                         </tr>
-                        <?php endif; ?>
                         
                         <tr>
                             <th>閲覧数</th>
@@ -964,28 +995,45 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
             </section>
             <?php endif; ?>
             
-            <?php if ($grant_data['eligible_expenses']): ?>
-            <!-- Eligible Expenses -->
+            <?php if ($grant_data['target_expenses']): ?>
+            <!-- Target Expenses (31列対応 - AC列) -->
             <section class="content-section">
                 <header class="section-header">
                     <div class="section-icon">💰</div>
                     <h2 class="section-title">対象経費</h2>
                 </header>
                 <div class="section-content">
-                    <?php echo wp_kses_post($grant_data['eligible_expenses']); ?>
+                    <?php echo wp_kses_post($grant_data['target_expenses']); ?>
                 </div>
             </section>
             <?php endif; ?>
             
             <?php if ($grant_data['required_documents']): ?>
-            <!-- Required Documents -->
+            <!-- Required Documents (31列対応 - Z列) -->
             <section class="content-section">
                 <header class="section-header">
-                    <div class="section-icon">📝</div>
+                    <div class="section-icon">📋</div>
                     <h2 class="section-title">必要書類</h2>
                 </header>
                 <div class="section-content">
-                    <?php echo wp_kses_post($grant_data['required_documents']); ?>
+                    <div style="background: var(--mono-off-white); padding: var(--space-5); border-radius: var(--radius-base); border-left: 4px solid var(--accent-info);">
+                        <?php echo wp_kses_post($grant_data['required_documents']); ?>
+                    </div>
+                </div>
+            </section>
+            <?php endif; ?>
+            
+            <?php if ($grant_data['region_notes']): ?>
+            <!-- Region Notes (31列対応 - Y列) -->
+            <section class="content-section">
+                <header class="section-header">
+                    <div class="section-icon">📍</div>
+                    <h2 class="section-title">地域に関する備考</h2>
+                </header>
+                <div class="section-content">
+                    <div style="background: var(--mono-off-white); padding: var(--space-5); border-radius: var(--radius-base); border-left: 4px solid var(--accent-warning);">
+                        <?php echo wp_kses_post($grant_data['region_notes']); ?>
+                    </div>
                 </div>
             </section>
             <?php endif; ?>
@@ -1020,6 +1068,12 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
                     </a>
                     <?php endif; ?>
                     
+                    <?php if ($grant_data['external_link']): ?>
+                    <a href="<?php echo esc_url($grant_data['external_link']); ?>" class="btn btn-secondary" target="_blank" rel="noopener">
+                        🌐 参考リンク
+                    </a>
+                    <?php endif; ?>
+                    
                     <button class="btn btn-secondary" onclick="toggleFavorite(<?php echo $post_id; ?>)">
                         ❤️ お気に入りに追加
                     </button>
@@ -1040,12 +1094,12 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
                     📊 統計情報
                 </h3>
                 <div class="stats-grid">
-                    <?php if ($grant_data['grant_success_rate'] > 0): ?>
+                    <?php if ($grant_data['adoption_rate'] > 0): ?>
                     <div class="stat-item">
-                        <span class="stat-number"><?php echo $grant_data['grant_success_rate']; ?>%</span>
+                        <span class="stat-number"><?php echo number_format($grant_data['adoption_rate'], 1); ?>%</span>
                         <span class="stat-label">採択率</span>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: <?php echo $grant_data['grant_success_rate']; ?>%"></div>
+                            <div class="progress-fill" style="width: <?php echo min($grant_data['adoption_rate'], 100); ?>%"></div>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -1063,8 +1117,8 @@ update_post_meta($post_id, 'views_count', $grant_data['views_count']);
                     <?php endif; ?>
                     
                     <div class="stat-item">
-                        <span class="stat-number"><?php echo $difficulty_data['dots']; ?>/4</span>
-                        <span class="stat-label">難易度</span>
+                        <span class="stat-number"><?php echo $difficulty_data['emoji']; ?> <?php echo $difficulty_data['dots']; ?>/4</span>
+                        <span class="stat-label">申請難易度</span>
                     </div>
                 </div>
             </div>
