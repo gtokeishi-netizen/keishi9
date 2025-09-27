@@ -893,12 +893,12 @@ function onOpen() {
     .addItem('🧪 接続テスト', 'testConnection');
   
   // AI機能メニュー
-  const aiMenu = ui.createMenu('🤖 AI機能')
-    .addItem('🧪 OpenAI接続テスト', 'testGPTConnection')
-    .addItem('🧠 全GPT関数テスト', 'testAllGPTFunctions')
+  const dataMenu = ui.createMenu('🗾 データ機能')
+    .addItem('🧪 OpenAI接続テスト', 'testPrefectureConnection')
+    .addItem('🧠 全GPT関数テスト', 'testAllPrefectureFunctions')
     .addItem('🏛️ 助成金機能テスト', 'testGrantFunctions')
     .addSeparator()
-    .addItem('📝 AI関数使用例表示', 'showGPTExamples')
+    .addItem('📝 AI関数使用例表示', 'showPrefectureExamples')
     .addItem('💼 助成金AI分析', 'runGrantAnalysis')
     .addItem('📊 一括AI処理', 'batchAIProcessing')
     .addSeparator()
@@ -916,7 +916,7 @@ function onOpen() {
   // メインメニューに追加
   ui.createMenu('🏛️ 助成金管理システム')
     .addSubMenu(wordPressMenu)
-    .addSubMenu(aiMenu)
+    .addSubMenu(dataMenu)
     .addSubMenu(jgrantsMenu)
     .addSeparator()
     .addItem('📚 使い方ガイド', 'showUsageGuide')
@@ -1449,37 +1449,35 @@ function setupNumericValidation(sheet, columnRange, minValue, maxValue, helpText
 // =============================================================================
 
 /**
- * AI関数の使用例を表示
+ * 都道府県データ関数の使用例を表示
  */
-function showGPTExamples() {
+function showPrefectureExamples() {
   const examples = `
-🤖 AI関数使用例
+🗾 都道府県データ関数使用例
 
 【基本関数】
-=GPT(A1, "この文章を要約してください")
-=GPT4(B1, "英語に翻訳してください") 
-=GPTFAST(C1, "キーワードを抽出してください")
+=GET_ALL_PREFECTURES() // 全都道府県一覧を取得
+=GET_MUNICIPALITIES("東京都") // 東京都の市町村一覧
+=GET_MUNICIPALITY_COUNT("大阪府") // 大阪府の市町村数
 
-【ビジネス特化】  
-=GPT_COMPANY("トヨタ自動車", "detailed")
-=GPT_SUMMARY(A1, "short")
-=GPT_TRANSLATE(B1, "english")
-=GPT_KEYWORDS(C1, 5)
-=GPT_SENTIMENT(D1)
+【検索関数】  
+=FIND_PREFECTURE_BY_MUNICIPALITY("新宿区") // 新宿区がある都道府県
+=SEARCH_MUNICIPALITIES("市", "東京都") // 東京都の「市」を含む市町村
+=SEARCH_MUNICIPALITIES("区") // 全国の「区」を含む市町村
 
-【助成金特化】
-=GPT_GRANT_MATCH(A1, B1) // 助成金情報と事業情報の適合性分析
-=GPT_GRANT_APPLICATION(A1, B1) // 申請書類支援
-=GPT_GRANT_RISK(A1) // リスクアセスメント
+【使用ケース】
+- 助成金の対象地域チェック
+- 地域限定サービスのエリア管理
+- 住所データのバリデーション
+- 地方自治体情報の管理
 
 【パラメータ説明】
-- input: 処理したいテキスト（セル参照可）
-- instruction: AIへの指示
-- model: gpt-4 または gpt-3.5-turbo
-- length: short/medium/long または detailed
+- prefecture: 都道府県名（例：「東京都」）
+- municipality: 市町村名（例：「新宿区」）
+- searchTerm: 検索語（例：「市」「町」「区」）
 `;
 
-  SpreadsheetApp.getUi().alert('🤖 AI関数使用例', examples, SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('🗾 都道府県データ関数使用例', examples, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
@@ -1491,7 +1489,7 @@ function showSystemInfo() {
 
 【統合機能】
 ✅ WordPress双方向同期
-✅ OpenAI GPT関数 (17種類)
+✅ 都道府県データ関数 (6種類)
 ✅ Jグランツデータ連携
 ✅ フィールドバリデーション
 
