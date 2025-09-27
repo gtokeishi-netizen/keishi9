@@ -1553,8 +1553,41 @@ function setupFieldValidation() {
 
     console.log('Setting up field validation rules...');
     
+    // A列: ID (システム列)
+    // ★バリデーションなし：WordPress連携時の一意識別子
+    
+    // B列: タイトル (自由入力)
+    // ★バリデーションなし：助成金の名称を自由に入力可能
+    
+    // C列: 内容 (自由入力)
+    // ★バリデーションなし：助成金の詳細内容を自由に記述可能
+    
+    // D列: 抜粋 (自由入力)
+    // ★バリデーションなし：助成金の概要を自由に記述可能
+    
     // E列: ステータス（publish/draft/private/deleted）
     setupDropdownValidation(sheet, 'E:E', ['draft', 'publish', 'private', 'deleted']);
+    
+    // F列: 作成日 (システム列)
+    // ★バリデーションなし：WordPress連携時に自動設定される作成日時
+    
+    // G列: 更新日 (システム列)
+    // ★バリデーションなし：WordPress連携時に自動設定される更新日時
+    
+    // H列: 助成金額（表示用） (自由入力)
+    // ★バリデーションなし：「最大100万円」「50〜200万円」など表示用の金額文字列
+    
+    // I列: 助成金額（数値） (自由入力)
+    // ★バリデーションなし：検索・並び替え用の数値データ
+    
+    // J列: 申請期限（表示用） (自由入力)
+    // ★バリデーションなし：「2024年12月31日まで」など表示用の期限文字列
+    
+    // K列: 申請期限（日付） (自由入力)
+    // ★バリデーションなし：検索・並び替え用の日付データ
+    
+    // L列: 実施組織 (自由入力)
+    // ★バリデーションなし：助成金を実施する組織名を自由に記述可能
     
     // M列: 組織タイプ
     setupDropdownValidation(sheet, 'M:M', [
@@ -1568,6 +1601,9 @@ function setupFieldValidation() {
       'other'         // その他
     ]);
     
+    // N列: 対象者・対象事業 (自由入力)
+    // ★バリデーションなし：助成金の対象となる人・事業を自由に記述可能
+    
     // O列: 申請方法
     setupDropdownValidation(sheet, 'O:O', [
       'online',       // オンライン申請
@@ -1575,6 +1611,12 @@ function setupFieldValidation() {
       'visit',        // 窓口申請
       'mixed'         // オンライン・郵送併用
     ]);
+    
+    // P列: 問い合わせ先 (自由入力)
+    // ★バリデーションなし：電話番号、メールアドレス、担当部署など自由に記述可能
+    
+    // Q列: 公式URL (自由入力)
+    // ★バリデーションなし：助成金の公式ウェブサイトURLを記述可能
     
     // R列: 地域制限
     setupDropdownValidation(sheet, 'R:R', [
@@ -1595,6 +1637,14 @@ function setupFieldValidation() {
     
     // T列: 都道府県 (自由入力 - 完全連携対応)
     // ★バリデーションなし：どんな都道府県名でも入力可能
+    // 既存の不正なバリデーションを削除
+    try {
+      const prefectureRange = sheet.getRange('T:T');
+      prefectureRange.clearDataValidations();
+      console.log('Prefecture column validation cleared');
+    } catch (error) {
+      console.log('Prefecture validation clear failed:', error);
+    }
     
     // U列: 市町村 (自由入力 - 完全連携対応)
     // ★バリデーションなし：カンマ区切りで複数の市町村名を入力可能
@@ -1620,6 +1670,14 @@ function setupFieldValidation() {
     
     // W列: タグ (自由入力 - 完全連携対応)
     // ★バリデーションなし：WordPressのタクソノミーと完全連携、カンマ区切りで複数入力可能
+    // 既存の不正なバリデーションを削除
+    try {
+      const tagsRange = sheet.getRange('W:W');
+      tagsRange.clearDataValidations();
+      console.log('Tags column validation cleared');
+    } catch (error) {
+      console.log('Tags validation clear failed:', error);
+    }
     
     // X列: 外部リンク (自由入力)
     // ★バリデーションなし：関連する外部リンクを自由に記述可能
@@ -1646,6 +1704,17 @@ function setupFieldValidation() {
     
     // AD列: 補助率 (自由入力) 
     // ★バリデーションなし：補助率を自由に記述可能（例：1/2、50%、上限100万円など）
+    
+    // AE列: シート更新日 (システム列)
+    // ★バリデーションなし：システムが自動更新、ユーザー入力不要
+    // 既存の不正なバリデーションを削除
+    try {
+      const systemDateRange = sheet.getRange('AE:AE');
+      systemDateRange.clearDataValidations();
+      console.log('System date column validation cleared');
+    } catch (error) {
+      console.log('System date validation clear failed:', error);
+    }
     
     console.log('Field validation setup completed successfully');
     
@@ -1675,6 +1744,13 @@ function setupFieldValidation() {
     newFreeTextColumns.forEach(column => {
       const range = sheet.getRange(`${column}1:${column}1000`);
       range.setBackground('#f5f5f5'); // 薄いグレー色で新規自由入力フィールドを区別
+    });
+    
+    // システム列を薄い黄色で区別
+    const systemColumns = ['A', 'F', 'G', 'AE']; // ID、作成日、更新日、シート更新日
+    systemColumns.forEach(column => {
+      const range = sheet.getRange(`${column}1:${column}1000`);
+      range.setBackground('#fffacd'); // 薄い黄色でシステムフィールドを区別
     });
     
     return {
