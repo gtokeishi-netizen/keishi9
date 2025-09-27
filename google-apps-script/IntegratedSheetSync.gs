@@ -6,14 +6,16 @@
  * 
  * このスクリプトは以下の機能を統合しています：
  * 1. 📍 Prefecture-Municipality Data Functions - 都道府県・市町村データ管理機能
- * 2. 🔄 WordPress Sync Functions - WordPress双方向同期機能
- * 3. 📊 Jgrants Integration - 政府助成金データ連携
+ * 2. 🤖 GPT・AI Functions - OpenAI API連携機能
+ * 3. 🔄 WordPress Sync Functions - WordPress双方向同期機能
+ * 4. 📊 Jgrants Integration - 政府助成金データ連携
  * 
  * 設置方法：
  * 1. Google Apps Scriptで新しいプロジェクト作成
  * 2. このコードをコピー＆ペースト
  * 3. 下記の設定セクションを環境に合わせて更新
- * 4. トリガーを設定（onEdit, onChange）
+ * 4. OpenAI APIキーの設定（メニューから実行）
+ * 5. トリガーを設定（onEdit, onChange）
  * 
  * @version 2.0.0 - Integrated Edition
  * @author Grant Insight Perfect
@@ -22,6 +24,24 @@
 // =============================================================================
 // 🔑 設定セクション - 環境に合わせて設定してください
 // =============================================================================
+
+/**
+ * OpenAI設定
+ */
+const OPENAI_CONFIG = {
+  // OpenAI APIキー (PropertiesServiceで管理推奨)
+  API_KEY: '', // 実際のAPIキーはsetupOpenAI()関数で設定
+  
+  // APIエンドポイント
+  API_URL: 'https://api.openai.com/v1/chat/completions',
+  
+  // 使用モデル
+  MODEL: 'gpt-3.5-turbo',
+  
+  // デフォルト設定
+  MAX_TOKENS: 1000,
+  TEMPERATURE: 0.7
+};
 
 /**
  * WordPress連携設定
@@ -260,6 +280,170 @@ function SEARCH_MUNICIPALITIES(searchTerm, prefecture) {
     
   } catch (error) {
     console.error('SEARCH_MUNICIPALITIES error:', error);
+    return `エラー: ${error.message}`;
+  }
+}
+
+// =============================================================================
+// 🤖 GPT・AI機能セクション
+// =============================================================================
+
+/**
+ * OpenAI APIキーを設定する
+ * スクリプトエディターで手動実行してAPIキーを設定してください
+ */
+function setupOpenAI() {
+  const apiKey = Browser.inputBox(
+    'OpenAI API Key Setup',
+    'Please enter your OpenAI API key:',
+    Browser.Buttons.OK_CANCEL
+  );
+  
+  if (apiKey === 'cancel' || !apiKey) {
+    Browser.msgBox('API key setup cancelled.');
+    return;
+  }
+  
+  // PropertiesServiceにAPIキーを安全に保存
+  PropertiesService.getScriptProperties().setProperty('OPENAI_API_KEY', apiKey);
+  Browser.msgBox('OpenAI API key has been saved successfully!');
+}
+
+/**
+ * OpenAI GPT APIを呼び出す
+ * 
+ * @param {string} prompt ユーザーからのプロンプト
+ * @param {string} systemMessage システムメッセージ（省略可能）
+ * @return {string} GPTからの応答
+ */
+function callOpenAI(prompt, systemMessage = '') {
+  try {
+    // APIキーを取得
+    const apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+    if (!apiKey) {
+      return 'エラー: OpenAI APIキーが設定されていません。setupOpenAI()関数を実行してください。';
+    }
+
+    // リクエストペイロード
+    const payload = {
+      model: OPENAI_CONFIG.MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: systemMessage || '日本語で簡潔に回答してください。'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: OPENAI_CONFIG.MAX_TOKENS,
+      temperature: OPENAI_CONFIG.TEMPERATURE
+    };
+
+    // API リクエスト
+    const response = UrlFetchApp.fetch(OPENAI_CONFIG.API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(payload)
+    });
+
+    const responseData = JSON.parse(response.getContentText());
+    
+    if (responseData.error) {
+      return `APIエラー: ${responseData.error.message}`;
+    }
+
+    return responseData.choices[0].message.content.trim();
+
+  } catch (error) {
+    console.error('OpenAI API Error:', error);
+    return `エラー: ${error.message}`;
+  }
+}
+
+/**
+ * GPT チャット機能（Google Sheets関数として使用可能）
+ * 
+ * @customfunction
+ * @param {string} prompt 質問やプロンプト
+ * @param {string} context 追加のコンテキスト（省略可能）
+ * @return {string} GPTからの回答
+ */
+function AI_CHAT(prompt, context = '') {
+  try {
+    if (!prompt || prompt.toString().trim() === '') {
+      return 'エラー: プロンプトを入力してください';
+    }
+    
+    const fullPrompt = context ? `${context}\n\n質問: ${prompt}` : prompt;
+    return callOpenAI(fullPrompt);
+    
+  } catch (error) {
+    console.error('AI_CHAT error:', error);
+    return `エラー: ${error.message}`;
+  }
+}
+
+/**
+ * 助成金申請書のレビュー機能
+ * 
+ * @customfunction
+ * @param {string} applicationText 申請書の内容
+ * @return {string} レビュー結果とアドバイス
+ */
+function REVIEW_APPLICATION(applicationText) {
+  try {
+    if (!applicationText || applicationText.toString().trim() === '') {
+      return 'エラー: 申請書の内容を入力してください';
+    }
+    
+    const systemMessage = `
+あなたは助成金申請のエキスパートです。
+以下の申請書内容を分析し、改善点やアドバイスを日本語で提供してください：
+- 内容の明確性
+- 論理構造
+- 必要な情報の不足
+- 説得力の向上方法
+`;
+    
+    return callOpenAI(applicationText, systemMessage);
+    
+  } catch (error) {
+    console.error('REVIEW_APPLICATION error:', error);
+    return `エラー: ${error.message}`;
+  }
+}
+
+/**
+ * 助成金要約機能
+ * 
+ * @customfunction
+ * @param {string} grantInfo 助成金情報
+ * @return {string} 要約された助成金情報
+ */
+function SUMMARIZE_GRANT(grantInfo) {
+  try {
+    if (!grantInfo || grantInfo.toString().trim() === '') {
+      return 'エラー: 助成金情報を入力してください';
+    }
+    
+    const systemMessage = `
+以下の助成金情報を分析し、重要なポイントを3つのカテゴリーに分けて要約してください：
+1. 申請条件・対象者
+2. 支援内容・金額
+3. 申請期限・手続き
+
+簡潔で分かりやすく日本語でまとめてください。
+`;
+    
+    return callOpenAI(grantInfo, systemMessage);
+    
+  } catch (error) {
+    console.error('SUMMARIZE_GRANT error:', error);
     return `エラー: ${error.message}`;
   }
 }
@@ -945,13 +1129,23 @@ function onOpen() {
     .addItem('🛠️ 詳細設定（トリガー設定）', 'setupTriggers')
     .addItem('🧪 接続テスト', 'testConnection');
   
-  // AI機能メニュー
+  // データ機能メニュー
   const dataMenu = ui.createMenu('🗾 データ機能')
     .addItem('🧪 都道府県データテスト', 'testPrefectureConnection')
     .addItem('🗾 全県データ機能テスト', 'testAllPrefectureFunctions')
     .addSeparator()
     .addItem('📝 都道府県機能使用例', 'showPrefectureExamples')
     .addItem('ℹ️ システム情報表示', 'showSystemInfo');
+  
+  // GPT・AI機能メニュー
+  const gptMenu = ui.createMenu('🤖 GPT・AI機能')
+    .addItem('🔑 OpenAI APIキー設定', 'setupOpenAI')
+    .addSeparator()
+    .addItem('💬 AIチャットテスト', 'testAIChat')
+    .addItem('📝 申請書レビューテスト', 'testApplicationReview')
+    .addItem('📊 助成金要約テスト', 'testGrantSummary')
+    .addSeparator()
+    .addItem('📖 GPT機能使用例', 'showGPTExamples');
   
   // Jグランツ連携メニュー
   const jgrantsMenu = ui.createMenu('Jグランツ連携')
@@ -965,6 +1159,7 @@ function onOpen() {
   ui.createMenu('🏛️ 助成金管理システム')
     .addSubMenu(wordPressMenu)
     .addSubMenu(dataMenu)
+    .addSubMenu(gptMenu)
     .addSubMenu(jgrantsMenu)
     .addSeparator()
     .addItem('📚 使い方ガイド', 'showUsageGuide')
@@ -1537,7 +1732,8 @@ function showSystemInfo() {
 
 【統合機能】
 ✅ WordPress双方向同期
-✅ 都道府県データ関数 (6種類)
+✅ 都道府県データ関数 (5種類)
+✅ GPT・AI機能 (3種類)
 ✅ Jグランツデータ連携
 ✅ フィールドバリデーション
 
@@ -1545,10 +1741,11 @@ function showSystemInfo() {
 【新規フィールド】 8列 (X-AD)
 
 【設定状況】
-WordPress URL: ${CONFIG.WORDPRESS_BASE_URL}
-シート名: ${CONFIG.SHEET_NAME}
-デバッグモード: ${CONFIG.DEBUG_MODE ? '有効' : '無効'}
+WordPress URL: ${WORDPRESS_CONFIG.WORDPRESS_BASE_URL}
+シート名: ${WORDPRESS_CONFIG.SHEET_NAME}
+デバッグモード: ${WORDPRESS_CONFIG.DEBUG_MODE ? '有効' : '無効'}
 都道府県データ: 全47都道府県対応
+OpenAI APIキー: ${PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY') ? '設定済み' : '未設定'}
 
 【サポート】
 - 完全な双方向同期
@@ -1576,10 +1773,12 @@ function showUsageGuide() {
 📝 データ入力 → 自動でWordPressに同期
 🔄 WordPress更新 → 自動でスプレッドシートに反映
 🗾 都道府県データ関数使用 → =GET_MUNICIPALITIES("東京都") で実行
+🤖 GPT機能使用 → =AI_CHAT("質問内容") で実行
 
 【メニュー活用】
 • WordPress連携: 同期・設定管理
 • データ機能: 都道府県・市町村データ取得
+• GPT・AI機能: AIチャット・申請書レビュー・要約
 • Jグランツ連携: 政府データ取得
 
 【フィールド色分け】
@@ -2076,6 +2275,131 @@ function sendDataToWordPress() {
 
 function receiveDataFromWordPress() {
   importGrantPosts();
+}
+
+// =============================================================================
+// 🧪 GPT・AI機能テスト関数群
+// =============================================================================
+
+/**
+ * AIチャット機能をテスト
+ */
+function testAIChat() {
+  try {
+    const testQuestion = '助成金申請で重要なポイントを3つ教えてください。';
+    const response = AI_CHAT(testQuestion);
+    
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      '🤖 AIチャットテスト結果',
+      `質問: ${testQuestion}\n\n回答: ${response}`,
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    SpreadsheetApp.getUi().alert(
+      '❌ AIチャットテストエラー',
+      `エラーが発生しました: ${error.message}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * 申請書レビュー機能をテスト
+ */
+function testApplicationReview() {
+  try {
+    const sampleApplication = `
+事業名: 地域活性化プロジェクト
+目的: 地域の商店街を活性化し、観光客を増やす
+内容: イベント開催とマーケティング活動
+予算: 200万円
+`;
+    
+    const response = REVIEW_APPLICATION(sampleApplication);
+    
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      '📝 申請書レビューテスト結果',
+      `サンプル申請書:\n${sampleApplication}\n\nレビュー結果:\n${response}`,
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    SpreadsheetApp.getUi().alert(
+      '❌ 申請書レビューテストエラー',
+      `エラーが発生しました: ${error.message}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * 助成金要約機能をテスト
+ */
+function testGrantSummary() {
+  try {
+    const sampleGrantInfo = `
+助成金名: 中小企業デジタル化促進助成金
+対象: 従業員50名以下の中小企業
+支援内容: IT導入費用の最大2/3を助成
+上限額: 100万円
+申請期間: 2024年4月1日から12月28日まで
+必要書類: 事業計画書、見積書、決算書類
+`;
+    
+    const response = SUMMARIZE_GRANT(sampleGrantInfo);
+    
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      '📊 助成金要約テスト結果',
+      `サンプル助成金情報:\n${sampleGrantInfo}\n\n要約結果:\n${response}`,
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    SpreadsheetApp.getUi().alert(
+      '❌ 助成金要約テストエラー',
+      `エラーが発生しました: ${error.message}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+/**
+ * GPT機能の使用例を表示
+ */
+function showGPTExamples() {
+  const examples = `
+🤖 GPT・AI機能 使用例
+
+1. AIチャット機能
+   =AI_CHAT("助成金申請のコツを教えて")
+   =AI_CHAT("事業計画書の書き方", "製造業向け")
+
+2. 申請書レビュー機能  
+   =REVIEW_APPLICATION(A2)  // A2セルの申請書内容をレビュー
+
+3. 助成金要約機能
+   =SUMMARIZE_GRANT(B2)   // B2セルの助成金情報を要約
+
+📝 使用前の準備:
+1. メニューから「🤖 GPT・AI機能」→「🔑 OpenAI APIキー設定」を実行
+2. OpenAI APIキーを入力して保存
+3. 各機能をテストしてから本格利用
+
+💡 ヒント:
+• 長い文章は別セルに分けて入力
+• コンテキスト（文脈）を追加するとより良い回答が得られます
+• API利用料金にご注意ください
+`;
+  
+  SpreadsheetApp.getUi().alert(
+    '📖 GPT・AI機能 使用例',
+    examples,
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
 }
 
 console.log('🏛️ Grant Management System v2.0.0 - Integrated Edition loaded successfully!');
