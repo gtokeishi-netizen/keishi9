@@ -1754,161 +1754,64 @@ function testPrefectureConnection() {
     return `❌ 接続テスト失敗: ${error.message}`;
   }
 }
-  
-  const tests = [
-    // 基本機能
-    {
-      name: '基本GPT関数',
-      func: () => GPT('こんにちは', 'この挨拶に返事をしてください'),
-      category: '基本'
-    },
-    {
-      name: 'GPT4関数',
-      func: () => GPT4('AI技術', '50字で説明してください'),
-      category: '基本'
-    },
-    {
-      name: '高速GPT関数',
-      func: () => GPTFAST('テスト', 'この文字の意味を教えて'),
-      category: '基本'
-    },
-    
-    // 汎用機能
-    {
-      name: '企業分析',
-      func: () => GPT_COMPANY('Google', 'short'),
-      category: '汎用'
-    },
-    {
-      name: '文章要約',
-      func: () => GPT_SUMMARY('人工知能（AI）は、コンピューターが人間の知能を模倣する技術です。機械学習や深層学習などの手法により、大量のデータから学習し、パターンを認識したり予測を行ったりすることができます。', 'short'),
-      category: '汎用'
-    },
-    {
-      name: '翻訳機能',
-      func: () => GPT_TRANSLATE('おはようございます', 'english'),
-      category: '汎用'
-    },
-    {
-      name: 'キーワード抽出',
-      func: () => GPT_KEYWORDS('人工知能と機械学習の技術は現代のビジネスにおいて重要な役割を果たしています', 3),
-      category: '汎用'
-    },
-    {
-      name: '感情分析',
-      func: () => GPT_SENTIMENT('今日はとても良い天気で、気分が最高です！'),
-      category: '汎用'
-    },
-    
-    // 助成金機能
-    {
-      name: '助成金分析',
-      func: () => GPT_GRANT_ANALYSIS('ものづくり補助金：中小企業の設備投資支援、最大1000万円、年2回募集', 200),
-      category: '助成金'
-    },
-    {
-      name: '適合性分析',
-      func: () => GPT_GRANT_MATCH('従業員30名のIT企業', 'IT導入補助金：ITツール導入支援'),
-      category: '助成金'
-    },
-    {
-      name: '助成金カテゴリ分類',
-      func: () => GPT_GRANT_CATEGORY('新製品開発のための設備投資を支援する補助金'),
-      category: '助成金'
-    }
-  ];
-  
-  // カテゴリ別に実行
-  const categories = ['基本', '汎用', '助成金'];
-  let totalTests = 0;
-  let successTests = 0;
-  
-  categories.forEach(category => {
-    console.log(`\n📂 ${category}機能のテスト`);
-    console.log('='.repeat(40));
-    
-    const categoryTests = tests.filter(test => test.category === category);
-    
-    categoryTests.forEach((test, index) => {
-      totalTests++;
-      try {
-        console.log(`\n${totalTests}. ${test.name}をテスト中...`);
-        const startTime = new Date().getTime();
-        
-        const result = test.func();
-        
-        const endTime = new Date().getTime();
-        const duration = endTime - startTime;
-        
-        console.log(`✅ ${test.name}: 成功 (${duration}ms)`);
-        console.log(`📝 結果: ${result.substring(0, 100)}${result.length > 100 ? '...' : ''}`);
-        
-        successTests++;
-        
-        // API制限を避けるため少し待機
-        Utilities.sleep(2000);
-        
-      } catch (error) {
-        console.error(`❌ ${test.name}: 失敗 - ${error.message}`);
-      }
-    });
-  });
-  
-  // 結果サマリー
-  console.log('\n' + '='.repeat(50));
-  console.log('🎉 全機能テスト完了!');
-  console.log(`📊 結果: ${successTests}/${totalTests} (成功率: ${Math.round(successTests/totalTests*100)}%)`);
-  
-  if (successTests === totalTests) {
-    console.log('🎊 すべてのテストが成功しました！');
-  } else {
-    console.log('⚠️ 一部のテストが失敗しました。ログを確認してください。');
-  }
-  
-  // キャッシュ統計も表示
-  console.log('💾 ' + getCacheStats());
-}
 
 /**
- * 助成金特化機能のみテスト
+ * 都道府県データ統合テスト
  */
 function testGrantFunctions() {
-  console.log('🏛️ 助成金特化機能のテストを開始...');
+  console.log('🗾 都道府県データ統合テストを開始...');
   
-  const grantTests = [
+  const prefectureTests = [
     {
-      name: '助成金分析',
-      func: () => GPT_GRANT_ANALYSIS('ものづくり補助金は、中小企業の設備投資を支援します。対象は製造業で、最大1000万円まで補助。申請期間は年2回。', 400)
+      name: '全都道府県データ取得',
+      func: () => GET_ALL_PREFECTURES().split(', ').length,
+      expected: 47
     },
     {
-      name: '適合性判定',
-      func: () => GPT_GRANT_MATCH('従業員50名のIT企業、年商3億円', 'IT導入補助金：中小企業のITツール導入支援、最大450万円')
+      name: '東京都市区町村数',
+      func: () => GET_MUNICIPALITY_COUNT('東京都'),
+      expected: '>= 50'
     },
     {
-      name: '申請書類支援',
-      func: () => GPT_GRANT_APPLICATION('事業再構築補助金', 'レストラン業、コロナ禍でテイクアウト事業開始', '事業計画書')
+      name: '神奈川県市町村取得',
+      func: () => GET_MUNICIPALITIES('神奈川県').includes('横浜市'),
+      expected: true
     },
     {
-      name: '助成金比較',
-      func: () => GPT_GRANT_COMPARE('ものづくり補助金：設備投資支援、最大1000万円', 'IT導入補助金：ITツール導入支援、最大450万円', '中小製造業にとっての利用しやすさ')
+      name: '新宿区所在地検索',
+      func: () => FIND_PREFECTURE_BY_MUNICIPALITY('新宿区'),
+      expected: '東京都'
     }
   ];
   
-  grantTests.forEach((test, index) => {
+  let passedTests = 0;
+  
+  prefectureTests.forEach((test, index) => {
     try {
       console.log(`\n${index + 1}. ${test.name}をテスト中...`);
       const result = test.func();
-      console.log(`✅ ${test.name}: 成功`);
-      console.log(`📋 結果:\n${result}`);
       
-      Utilities.sleep(3000); // 助成金分析は重い処理なので長めに待機
+      let testPassed = false;
+      if (typeof test.expected === 'string' && test.expected.startsWith('>=')) {
+        const expectedValue = parseInt(test.expected.substring(3));
+        testPassed = result >= expectedValue;
+      } else {
+        testPassed = result === test.expected;
+      }
+      
+      if (testPassed) {
+        console.log(`✅ ${test.name}: 成功 - 結果: ${result}`);
+        passedTests++;
+      } else {
+        console.log(`❌ ${test.name}: 失敗 - 期待値: ${test.expected}, 実際: ${result}`);
+      }
       
     } catch (error) {
-      console.error(`❌ ${test.name}: 失敗 - ${error.message}`);
+      console.error(`❌ ${test.name}: エラー - ${error.message}`);
     }
   });
   
-  console.log('\n🏆 助成金機能テスト完了!');
+  console.log(`\n🏆 都道府県データテスト完了! ${passedTests}/${prefectureTests.length} 成功`);
 }
 
 /**
@@ -1923,25 +1826,12 @@ function getCacheStats() {
   }
 }
 
-/**
- * キャッシュクリア関数
- */
-function clearGPTCache() {
-  try {
-    const cache = CacheService.getScriptCache();
-    // 個別のキャッシュクリアは困難なため、ログのみ記録
-    console.log('🗑️ GPTキャッシュクリア要求を受信しました');
-    return 'キャッシュクリア処理を実行しました';
-  } catch (error) {
-    console.error('キャッシュクリアエラー:', error.message);
-    return 'キャッシュクリアに失敗しました';
-  }
-}
+
 
 /**
- * 一括AI処理（例：選択範囲の文章を一括要約）
+ * 都道府県データ一括処理
  */
-function batchAIProcessing() {
+function batchDataProcessing() {
   try {
     const sheet = SpreadsheetApp.getActiveSheet();
     const selection = sheet.getActiveRange();
@@ -1951,17 +1841,21 @@ function batchAIProcessing() {
       return;
     }
     
-    const response = SpreadsheetApp.getUi().prompt('📊 一括AI処理', 
-      '選択範囲に対して実行するAI処理を指定してください：\n\n' +
-      '例: 要約して, 英訳して, キーワード抽出して',
+    const response = SpreadsheetApp.getUi().prompt('🗾 都道府県データ処理', 
+      '選択範囲に対して実行する処理を選んでください：\n\n' +
+      '1. 都道府県名から市町村一覧を取得\n' +
+      '2. 市町村名から都道府県を検索\n' +
+      '3. 市町村数をカウント\n\n' +
+      '番号を入力してください (1-3):',
       SpreadsheetApp.getUi().ButtonSet.OK_CANCEL);
       
     if (response.getSelectedButton() !== SpreadsheetApp.getUi().Button.OK) {
       return;
     }
     
-    const instruction = response.getResponseText();
-    if (!instruction) {
+    const option = response.getResponseText();
+    if (!option || !['1', '2', '3'].includes(option)) {
+      SpreadsheetApp.getUi().alert('❌ エラー', '1-3の番号を入力してください。', SpreadsheetApp.getUi().ButtonSet.OK);
       return;
     }
     
@@ -1971,10 +1865,21 @@ function batchAIProcessing() {
     for (let i = 0; i < values.length; i++) {
       const row = [];
       for (let j = 0; j < values[i].length; j++) {
-        const cellValue = values[i][j].toString();
+        const cellValue = values[i][j].toString().trim();
         if (cellValue && cellValue.length > 0) {
           try {
-            const result = GPT(cellValue, instruction);
+            let result = '';
+            switch(option) {
+              case '1':
+                result = GET_MUNICIPALITIES(cellValue);
+                break;
+              case '2':
+                result = FIND_PREFECTURE_BY_MUNICIPALITY(cellValue);
+                break;
+              case '3':
+                result = GET_MUNICIPALITY_COUNT(cellValue);
+                break;
+            }
             row.push(result);
           } catch (error) {
             row.push(`エラー: ${error.message}`);
@@ -1984,22 +1889,16 @@ function batchAIProcessing() {
         }
       }
       results.push(row);
-      
-      // プログレス表示とレート制限対策
-      if (i % 5 === 0) {
-        console.log(`Processing... ${i + 1}/${values.length}`);
-        Utilities.sleep(1000);
-      }
     }
     
     // 結果を隣の列に出力
     const outputRange = sheet.getRange(selection.getRow(), selection.getLastColumn() + 1, results.length, results[0].length);
     outputRange.setValues(results);
     
-    SpreadsheetApp.getUi().alert('✅ 完了', `一括AI処理が完了しました。\n処理件数: ${values.length}行`, SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('✅ 完了', `都道府県データ処理が完了しました。\n処理件数: ${values.length}行`, SpreadsheetApp.getUi().ButtonSet.OK);
     
   } catch (error) {
-    SpreadsheetApp.getUi().alert('❌ エラー', `一括処理中にエラーが発生しました：\n${error.message}`, SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('❌ エラー', `処理中にエラーが発生しました：\n${error.message}`, SpreadsheetApp.getUi().ButtonSet.OK);
   }
 }
 
