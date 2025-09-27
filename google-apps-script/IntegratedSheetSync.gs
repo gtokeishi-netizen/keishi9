@@ -1607,6 +1607,29 @@ function setupFieldValidation() {
       console.log('Municipality validation clear failed:', error);
     }
     
+    // V列: カテゴリ (自由入力 - 完全連携対応)
+    // ★バリデーションなし：WordPressのタクソノミーと完全連携、自由入力可能
+    // 既存の不正なバリデーションを削除
+    try {
+      const categoryRange = sheet.getRange('V:V');
+      categoryRange.clearDataValidations();
+      console.log('Category column validation cleared');
+    } catch (error) {
+      console.log('Category validation clear failed:', error);
+    }
+    
+    // W列: タグ (自由入力 - 完全連携対応)
+    // ★バリデーションなし：WordPressのタクソノミーと完全連携、カンマ区切りで複数入力可能
+    
+    // X列: 外部リンク (自由入力)
+    // ★バリデーションなし：関連する外部リンクを自由に記述可能
+    
+    // Y列: 地域に関する備考 (自由入力)
+    // ★バリデーションなし：地域固有の条件や備考を自由に記述可能
+    
+    // Z列: 必要書類 (自由入力)
+    // ★バリデーションなし：申請に必要な書類リストを自由に記述可能
+    
     // AA列: 採択率（%）- 数値バリデーション（0-100の範囲）
     setupNumericValidation(sheet, 'AA:AA', 0, 100, '採択率は0〜100の数値で入力してください（%は自動で付与されます）');
     
