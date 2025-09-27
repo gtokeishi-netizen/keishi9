@@ -1147,6 +1147,7 @@ function onOpen() {
     .addItem('🧪 都道府県データテスト', 'testPrefectureConnection')
     .addItem('🗾 全県データ機能テスト', 'testAllPrefectureFunctions')
     .addSeparator()
+    .addItem('🔧 市町村列バリデーション修正', 'fixMunicipalityValidation')
     .addItem('📝 都道府県機能使用例', 'showPrefectureExamples')
     .addItem('ℹ️ システム情報表示', 'showSystemInfo');
   
@@ -1597,6 +1598,14 @@ function setupFieldValidation() {
     
     // U列: 市町村 (自由入力 - 完全連携対応)
     // ★バリデーションなし：カンマ区切りで複数の市町村名を入力可能
+    // 既存の不正なバリデーションを削除
+    try {
+      const municipalityRange = sheet.getRange('U:U');
+      municipalityRange.clearDataValidations();
+      console.log('Municipality column validation cleared');
+    } catch (error) {
+      console.log('Municipality validation clear failed:', error);
+    }
     
     // AA列: 採択率（%）- 数値バリデーション（0-100の範囲）
     setupNumericValidation(sheet, 'AA:AA', 0, 100, '採択率は0〜100の数値で入力してください（%は自動で付与されます）');
@@ -2423,6 +2432,50 @@ function showGPTExamples() {
     examples,
     SpreadsheetApp.getUi().ButtonSet.OK
   );
+}
+
+/**
+ * 市町村列のバリデーション問題を修正
+ */
+function fixMunicipalityValidation() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
+    
+    if (!sheet) {
+      throw new Error('対象シートが見つかりません');
+    }
+    
+    // U列（市町村）の不正なバリデーションを削除
+    const municipalityRange = sheet.getRange('U:U');
+    municipalityRange.clearDataValidations();
+    
+    // T列（都道府県）の不正なバリデーションも削除
+    const prefectureRange = sheet.getRange('T:T');
+    prefectureRange.clearDataValidations();
+    
+    // 背景色を正しい色に設定（緑色：タクソノミーフィールド）
+    municipalityRange.setBackground('#e8f5e8');
+    prefectureRange.setBackground('#e8f5e8');
+    
+    console.log('Municipality and Prefecture validation fixed');
+    
+    SpreadsheetApp.getUi().alert('✅ 修正完了', 
+      '市町村・都道府県列の問題を修正しました。\n\n' +
+      '✓ 不正なバリデーションを削除\n' +
+      '✓ 自由入力可能に設定\n' +
+      '✓ 背景色を適切に設定\n\n' +
+      'これで正常に市町村名・都道府県名を入力できます。',
+      SpreadsheetApp.getUi().ButtonSet.OK);
+    
+    return { success: true, message: '市町村バリデーション修正完了' };
+    
+  } catch (error) {
+    console.error('Fix municipality validation failed:', error);
+    SpreadsheetApp.getUi().alert('❌ 修正エラー', 
+      '修正中にエラーが発生しました：\n' + error.message,
+      SpreadsheetApp.getUi().ButtonSet.OK);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
