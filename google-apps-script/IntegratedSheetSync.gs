@@ -46,6 +46,59 @@ const WORDPRESS_CONFIG = {
   DEBUG_MODE: true
 };
 
+/**
+ * 都道府県・市町村データ
+ * 47都道府県とその市町村一覧
+ */
+const PREFECTURE_DATA = {
+  '北海道': ['札幌市', '函館市', '小樽市', '旭川市', '室蘭市', '釧路市', '帯広市', '北見市', '夕張市', '岩見沢市', '網走市', '留萌市', '苫小牧市', '稚内市', '美唄市', '芦別市', '江別市', '赤平市', '紋別市', '士別市', '名寄市', '三笠市', '根室市', '千歳市', '滝川市', '砂川市', '歌志内市', '深川市', '富良野市', '登別市', '恵庭市', '伊達市', '北広島市', '石狩市', '北斗市'],
+  '青森県': ['青森市', '弘前市', '八戸市', '黒石市', '五所川原市', 'つがる市', '平川市', '十和田市', '三沢市', 'むつ市'],
+  '岩手県': ['盛岡市', '宮古市', '大船渡市', '花巻市', '北上市', '久慈市', '遠野市', '一関市', '陸前高田市', '釜石市', '二戸市', '八幡平市', '奥州市', '滝沢市'],
+  '宮城県': ['仙台市', '石巻市', '塩竈市', '気仙沼市', '白石市', '名取市', '角田市', '多賀城市', '岩沼市', '登米市', '栗原市', '東松島市', '大崎市', '富谷市'],
+  '秋田県': ['秋田市', '能代市', '横手市', '大館市', '男鹿市', '湯沢市', '鹿角市', '由利本荘市', '潟上市', '大仙市', 'にかほ市', '仙北市'],
+  '山形県': ['山形市', '米沢市', '鶴岡市', '酒田市', '新庄市', '寒河江市', '上山市', '村山市', '長井市', '天童市', '東根市', '尾花沢市', '南陽市'],
+  '福島県': ['福島市', '会津若松市', '郡山市', 'いわき市', '白河市', '須賀川市', '喜多方市', '相馬市', '二本松市', '田村市', '南相馬市', '伊達市', '本宮市'],
+  '茨城県': ['水戸市', '日立市', '土浦市', '古河市', '石岡市', '結城市', '龍ケ崎市', '下妻市', '常総市', '常陸太田市', '高萩市', '北茨城市', '笠間市', '取手市', '牛久市', 'つくば市', 'ひたちなか市', '鹿嶋市', '潮来市', '守谷市', '常陸大宮市', '那珂市', '筑西市', '坂東市', '稲敷市', 'かすみがうら市', '桜川市', '神栖市', '行方市', '鉾田市', 'つくばみらい市', '小美玉市'],
+  '栃木県': ['宇都宮市', '足利市', '栃木市', '佐野市', '鹿沼市', '日光市', '小山市', '真岡市', '大田原市', '矢板市', '那須塩原市', 'さくら市', '那須烏山市', '下野市'],
+  '群馬県': ['前橋市', '高崎市', '桐生市', '伊勢崎市', '太田市', '沼田市', '館林市', '渋川市', '藤岡市', '富岡市', '安中市', 'みどり市'],
+  '埼玉県': ['さいたま市', '川越市', '熊谷市', '川口市', '行田市', '秩父市', '所沢市', '飯能市', '加須市', '本庄市', '東松山市', '春日部市', '狭山市', '羽生市', '鴻巣市', '深谷市', '上尾市', '草加市', '越谷市', '蕨市', '戸田市', '入間市', '朝霞市', '志木市', '和光市', '新座市', '桶川市', '久喜市', '北本市', '八潮市', '富士見市', '三郷市', '蓮田市', '坂戸市', '幸手市', '鶴ヶ島市', '日高市', '吉川市', 'ふじみ野市', '白岡市'],
+  '千葉県': ['千葉市', '銚子市', '市川市', '船橋市', '館山市', '木更津市', '松戸市', '野田市', '茂原市', '成田市', '佐倉市', '東金市', '旭市', '習志野市', '柏市', '勝浦市', '市原市', '流山市', '八千代市', '我孫子市', '鴨川市', '鎌ケ谷市', '君津市', '富津市', '浦安市', '四街道市', '袖ケ浦市', '八街市', '印西市', '白井市', '富里市', '南房総市', '匝瑳市', '香取市', '山武市', 'いすみ市', '大網白里市'],
+  '東京都': ['千代田区', '中央区', '港区', '新宿区', '文京区', '台東区', '墨田区', '江東区', '品川区', '目黒区', '大田区', '世田谷区', '渋谷区', '中野区', '杉並区', '豊島区', '北区', '荒川区', '板橋区', '練馬区', '足立区', '葛飾区', '江戸川区', '八王子市', '立川市', '武蔵野市', '三鷹市', '青梅市', '府中市', '昭島市', '調布市', '町田市', '小金井市', '小平市', '日野市', '東村山市', '国分寺市', '国立市', '福生市', '狛江市', '東大和市', '清瀬市', '東久留米市', '武蔵村山市', '多摩市', '稲城市', '羽村市', 'あきる野市', '西東京市'],
+  '神奈川県': ['横浜市', '川崎市', '相模原市', '横須賀市', '平塚市', '鎌倉市', '藤沢市', '小田原市', '茅ヶ崎市', '逗子市', '三浦市', '秦野市', '厚木市', '大和市', '伊勢原市', '海老名市', '座間市', '南足柄市', '綾瀬市'],
+  '新潟県': ['新潟市', '長岡市', '三条市', '柏崎市', '新発田市', '小千谷市', '加茂市', '十日町市', '見附市', '村上市', '燕市', '糸魚川市', '妙高市', '五泉市', '上越市', '阿賀野市', '佐渡市', '魚沼市', '南魚沼市', '胎内市'],
+  '富山県': ['富山市', '高岡市', '魚津市', '氷見市', '滑川市', '黒部市', '砺波市', '小矢部市', '南砺市', '射水市'],
+  '石川県': ['金沢市', '七尾市', '小松市', '輪島市', '珠洲市', '加賀市', '羽咋市', 'かほく市', '白山市', '能美市', '野々市市'],
+  '福井県': ['福井市', '敦賀市', '小浜市', '大野市', '勝山市', '鯖江市', 'あわら市', '越前市', '坂井市'],
+  '山梨県': ['甲府市', '富士吉田市', '都留市', '山梨市', '大月市', '韮崎市', '南アルプス市', '北杜市', '甲斐市', '笛吹市', '上野原市', '甲州市', '中央市'],
+  '長野県': ['長野市', '松本市', '上田市', '岡谷市', '飯田市', '諏訪市', '須坂市', '小諸市', '伊那市', '駒ヶ根市', '中野市', '大町市', '飯山市', '茅野市', '塩尻市', '佐久市', '千曲市', '東御市', '安曇野市'],
+  '岐阜県': ['岐阜市', '大垣市', '高山市', '多治見市', '関市', '中津川市', '美濃市', '瑞浪市', '羽島市', '恵那市', '美濃加茂市', '土岐市', '各務原市', '可児市', '山県市', '瑞穂市', '飛騨市', '本巣市', '郡上市', '下呂市', '海津市'],
+  '静岡県': ['静岡市', '浜松市', '沼津市', '熱海市', '三島市', '富士宮市', '伊東市', '島田市', '富士市', '磐田市', '焼津市', '掛川市', '藤枝市', '御殿場市', '袋井市', '下田市', '裾野市', '湖西市', '伊豆市', '御前崎市', '菊川市', '伊豆の国市', '牧之原市'],
+  '愛知県': ['名古屋市', '豊橋市', '岡崎市', '一宮市', '瀬戸市', '半田市', '春日井市', '豊川市', '津島市', '碧南市', '刈谷市', '豊田市', '安城市', '西尾市', '蒲郡市', '犬山市', '常滑市', '江南市', '小牧市', '稲沢市', '新城市', '東海市', '大府市', '知多市', '知立市', '尾張旭市', '高浜市', '岩倉市', '豊明市', '日進市', '田原市', '愛西市', '清須市', '北名古屋市', '弥富市', 'みよし市', 'あま市', '長久手市'],
+  '三重県': ['津市', '四日市市', '伊勢市', '松阪市', '桑名市', '鈴鹿市', '名張市', '尾鷲市', '亀山市', '鳥羽市', '熊野市', 'いなべ市', '志摩市', '伊賀市'],
+  '滋賀県': ['大津市', '彦根市', '長浜市', '近江八幡市', '草津市', '守山市', '栗東市', '甲賀市', '野洲市', '湖南市', '高島市', '東近江市', '米原市'],
+  '京都府': ['京都市', '福知山市', '舞鶴市', '綾部市', '宇治市', '宮津市', '亀岡市', '城陽市', '向日市', '長岡京市', '八幡市', '京田辺市', '京丹後市', '南丹市', '木津川市'],
+  '大阪府': ['大阪市', '堺市', '岸和田市', '豊中市', '池田市', '吹田市', '泉大津市', '高槻市', '貝塚市', '守口市', '枚方市', '茨木市', '八尾市', '泉佐野市', '富田林市', '寝屋川市', '河内長野市', '松原市', '大東市', '和泉市', '箕面市', '柏原市', '羽曳野市', '門真市', '摂津市', '高石市', '藤井寺市', '東大阪市', '泉南市', '四條畷市', '交野市', '大阪狭山市', '阪南市'],
+  '兵庫県': ['神戸市', '姫路市', '尼崎市', '明石市', '西宮市', '洲本市', '芦屋市', '伊丹市', '相生市', '豊岡市', '加古川市', '赤穂市', '西脇市', '宝塚市', '三木市', '高砂市', '川西市', '小野市', '三田市', '加西市', '篠山市', '養父市', '丹波市', '南あわじ市', '朝来市', '淡路市', '宍粟市', '加東市', 'たつの市'],
+  '奈良県': ['奈良市', '大和高田市', '大和郡山市', '天理市', '橿原市', '桜井市', '五條市', '御所市', '生駒市', '香芝市', '葛城市', '宇陀市'],
+  '和歌山県': ['和歌山市', '海南市', '橋本市', '有田市', '御坊市', '田辺市', '新宮市', '紀の川市', '岩出市'],
+  '鳥取県': ['鳥取市', '米子市', '倉吉市', '境港市'],
+  '島根県': ['松江市', '浜田市', '出雲市', '益田市', '大田市', '安来市', '江津市', '雲南市'],
+  '岡山県': ['岡山市', '倉敷市', '津山市', '玉野市', '笠岡市', '井原市', '総社市', '高梁市', '新見市', '備前市', '瀬戸内市', '赤磐市', '真庭市', '美作市', '浅口市'],
+  '広島県': ['広島市', '呉市', '竹原市', '三原市', '尾道市', '福山市', '府中市', '三次市', '庄原市', '大竹市', '東広島市', '廿日市市', '安芸高田市', '江田島市'],
+  '山口県': ['下関市', '宇部市', '山口市', '萩市', '防府市', '下松市', '岩国市', '光市', '長門市', '柳井市', '美祢市', '周南市', '山陽小野田市'],
+  '徳島県': ['徳島市', '鳴門市', '小松島市', '阿南市', '吉野川市', '阿波市', '美馬市', '三好市'],
+  '香川県': ['高松市', '丸亀市', '坂出市', '善通寺市', '観音寺市', 'さぬき市', '東かがわ市', '三豊市'],
+  '愛媛県': ['松山市', '今治市', '宇和島市', '八幡浜市', '新居浜市', '西条市', '大洲市', '伊予市', '四国中央市', '西予市', '東温市'],
+  '高知県': ['高知市', '室戸市', '安芸市', '南国市', '土佐市', '須崎市', '宿毛市', '土佐清水市', '四万十市', '香南市', '香美市'],
+  '福岡県': ['北九州市', '福岡市', '大牟田市', '久留米市', '直方市', '飯塚市', '田川市', '柳川市', '八女市', '筑後市', '大川市', '行橋市', '豊前市', '中間市', '小郡市', '筑紫野市', '春日市', '大野城市', '宗像市', '太宰府市', '古賀市', '福津市', 'うきは市', '宮若市', '嘉麻市', '朝倉市', 'みやま市', '糸島市', '那珂川市'],
+  '佐賀県': ['佐賀市', '唐津市', '鳥栖市', '多久市', '伊万里市', '武雄市', '鹿島市', '小城市', '嬉野市', '神埼市'],
+  '長崎県': ['長崎市', '佐世保市', '島原市', '諫早市', '大村市', '平戸市', '松浦市', '対馬市', '壱岐市', '五島市', '西海市', '雲仙市', '南島原市'],
+  '熊本県': ['熊本市', '八代市', '人吉市', '荒尾市', '水俣市', '玉名市', '山鹿市', '菊池市', '宇土市', '上天草市', '宇城市', '阿蘇市', '天草市', '合志市'],
+  '大分県': ['大分市', '別府市', '中津市', '日田市', '佐伯市', '臼杵市', '津久見市', '竹田市', '豊後高田市', '杵築市', '宇佐市', '豊後大野市', '由布市', '国東市'],
+  '宮崎県': ['宮崎市', '都城市', '延岡市', '日南市', '小林市', '日向市', '串間市', '西都市', 'えびの市'],
+  '鹿児島県': ['鹿児島市', '鹿屋市', '枕崎市', '阿久根市', '出水市', '指宿市', '西之表市', '垂水市', '薩摩川内市', '日置市', '曽於市', '霧島市', 'いちき串木野市', '南さつま市', '志布志市', '奄美市', '南九州市', '伊佐市', '姶良市'],
+  '沖縄県': ['那覇市', '宜野湾市', '石垣市', '浦添市', '名護市', '糸満市', '沖縄市', '豊見城市', 'うるま市', '宮古島市', '南城市']
+};
 
 
 // 後方互換性のために CONFIG も維持
@@ -894,16 +947,11 @@ function onOpen() {
   
   // AI機能メニュー
   const dataMenu = ui.createMenu('🗾 データ機能')
-    .addItem('🧪 OpenAI接続テスト', 'testPrefectureConnection')
-    .addItem('🧠 全GPT関数テスト', 'testAllPrefectureFunctions')
-    .addItem('🏛️ 助成金機能テスト', 'testGrantFunctions')
+    .addItem('🧪 都道府県データテスト', 'testPrefectureConnection')
+    .addItem('🗾 全県データ機能テスト', 'testAllPrefectureFunctions')
     .addSeparator()
-    .addItem('📝 AI関数使用例表示', 'showPrefectureExamples')
-    .addItem('💼 助成金AI分析', 'runGrantAnalysis')
-    .addItem('📊 一括AI処理', 'batchAIProcessing')
-    .addSeparator()
-    .addItem('⚙️ AI設定確認', 'checkAISettings')
-    .addItem('🗑️ AIキャッシュクリア', 'clearGPTCache');
+    .addItem('📝 都道府県機能使用例', 'showPrefectureExamples')
+    .addItem('ℹ️ システム情報表示', 'showSystemInfo');
   
   // Jグランツ連携メニュー
   const jgrantsMenu = ui.createMenu('Jグランツ連携')
@@ -1522,16 +1570,16 @@ function showUsageGuide() {
 【初期設定】
 1. 🚀 簡易セットアップを実行
 2. WordPress側でWebhook設定
-3. OpenAI APIキーを設定（AI機能使用時）
+3. 都道府県データ機能の確認
 
 【基本操作】
 📝 データ入力 → 自動でWordPressに同期
 🔄 WordPress更新 → 自動でスプレッドシートに反映
-🤖 AI関数使用 → =GPT(セル, "指示") で実行
+🗾 都道府県データ関数使用 → =GET_MUNICIPALITIES("東京都") で実行
 
 【メニュー活用】
 • WordPress連携: 同期・設定管理
-• AI機能: GPT関数・一括処理
+• データ機能: 都道府県・市町村データ取得
 • Jグランツ連携: 政府データ取得
 
 【フィールド色分け】
@@ -1578,117 +1626,63 @@ function testPrefectureConnection() {
 }
 
 /**
- * 全GPT関数テスト
+ * 全都道府県データ機能テスト
  */
-function testAllGPTFunctions() {
-  console.log('🧪 全GPT関数のテストを開始します...\n');
+function testAllPrefectureFunctions() {
+  console.log('🧪 全都道府県データ機能のテストを開始します...\n');
   
   const tests = [
-    // 基本機能テスト
     {
-      name: 'GPT基本機能',
-      func: () => GPT('OpenAI', 'この会社について1行で説明して'),
+      name: '都道府県一覧取得',
+      func: () => GET_ALL_PREFECTURES(),
       category: '基本'
     },
     {
-      name: 'GPT4機能',
-      func: () => GPT4('OpenAI', '会社の特徴を教えて'),
-      category: '基本'
+      name: '東京都の市区町村取得',
+      func: () => GET_MUNICIPALITIES('東京都'),
+      category: '市町村'
     },
     {
-      name: 'GPTFAST機能',
-      func: () => GPTFAST('Hello', '日本語に翻訳して'),
-      category: '基本'
-    },
-    
-    // 汎用機能テスト
-    {
-      name: '会社概要機能',
-      func: () => GPT_COMPANY('Microsoft', 'short'),
-      category: '汎用'
+      name: '大阪府の市町村数取得',
+      func: () => GET_MUNICIPALITY_COUNT('大阪府'),
+      category: '市町村'  
     },
     {
-      name: '要約機能',
-      func: () => GPT_SUMMARY('人工知能は現代社会において重要な技術となっています。機械学習、自然言語処理、画像認識など様々な分野で活用されています。', 'short'),
-      category: '汎用'
+      name: '横浜市の都道府県検索',
+      func: () => FIND_PREFECTURE_BY_MUNICIPALITY('横浜市'),
+      category: '検索'
     },
     {
-      name: '翻訳機能',
-      func: () => GPT_TRANSLATE('Good morning', 'japanese'),
-      category: '汎用'
-    },
-    {
-      name: 'キーワード抽出',
-      func: () => GPT_KEYWORDS('AIと機械学習は現代のビジネスにおいて重要な技術です。', 3),
-      category: '汎用'
-    },
-    {
-      name: '感情分析',
-      func: () => GPT_SENTIMENT('とても素晴らしい製品だと思います！'),
-      category: '汎用'
-    },
-    
-    // 助成金特化機能テスト
-    {
-      name: '助成金分析機能',
-      func: () => GPT_GRANT_ANALYSIS('IT導入補助金は、中小企業のIT導入を支援する制度です。対象は中小企業で、ITツール導入費用の一部を補助します。', 300),
-      category: '助成金'
-    },
-    {
-      name: '助成金カテゴリ分類',
-      func: () => GPT_GRANT_CATEGORY('新規事業立ち上げのための設備投資と人材採用を支援する補助金制度'),
-      category: '助成金'
-    },
-    {
-      name: '申請スケジュール提案',
-      func: () => GPT_GRANT_SCHEDULE('申請締切：2024年12月31日、必要書類：事業計画書、決算書類', '2024-11-01'),
-      category: '助成金'
-    },
-    {
-      name: '地域別助成金情報',
-      func: () => GPT_GRANT_REGIONAL('東京都', 'IT企業'),
-      category: '助成金'
+      name: '市町村名の部分検索',
+      func: () => SEARCH_MUNICIPALITIES('横浜', '神奈川県'),
+      category: '検索'
     }
   ];
   
-  // カテゴリ別に実行
-  const categories = ['基本', '汎用', '助成金'];
   let totalTests = 0;
   let successTests = 0;
   
-  categories.forEach(category => {
-    console.log(`\n📂 ${category}機能のテスト`);
-    console.log('='.repeat(40));
-    
-    const categoryTests = tests.filter(test => test.category === category);
-    
-    categoryTests.forEach((test, index) => {
-      totalTests++;
-      try {
-        console.log(`\n${totalTests}. ${test.name}をテスト中...`);
-        const startTime = new Date().getTime();
-        
-        const result = test.func();
-        
-        const endTime = new Date().getTime();
-        const duration = endTime - startTime;
-        
-        console.log(`✅ ${test.name}: 成功 (${duration}ms)`);
-        console.log(`📝 結果: ${result.substring(0, 100)}${result.length > 100 ? '...' : ''}`);
-        
-        successTests++;
-        
-        // API制限を避けるため少し待機
-        Utilities.sleep(2000);
-        
-      } catch (error) {
-        console.error(`❌ ${test.name}: 失敗 - ${error.message}`);
-      }
-    });
+  tests.forEach(test => {
+    totalTests++;
+    try {
+      console.log(`\n${totalTests}. ${test.name}をテスト中...`);
+      const startTime = new Date().getTime();
+      
+      const result = test.func();
+      
+      const endTime = new Date().getTime();
+      const duration = endTime - startTime;
+      
+      console.log(`✅ ${test.name}: 成功 (${duration}ms)`);
+      console.log(`📝 結果: ${Array.isArray(result) ? result.join(', ') : result}`);
+      
+      successTests++;
+      
+    } catch (error) {
+      console.error(`❌ ${test.name}: 失敗 - ${error.message}`);
+    }
   });
   
-  // 結果サマリー
-  console.log('\n' + '='.repeat(50));
   console.log('🎉 全機能テスト完了!');
   console.log(`📊 成功率: ${successTests}/${totalTests} (${Math.round(successTests/totalTests*100)}%)`);
   
@@ -1699,38 +1693,7 @@ function testAllGPTFunctions() {
   };
 }
 
-/**
- * GPTキャッシュクリア
- */
-function clearGPTCache() {
-  try {
-    const cache = CacheService.getScriptCache();
-    
-    // キャッシュの統計情報を取得（削除前）
-    const stats = getCacheStats();
-    
-    // 全てのキャッシュをクリア（GPT関連のプレフィックスがあるもののみ）
-    // 注意: Google Apps Scriptでは個別のキーを指定してクリアできないため、
-    // 全体クリアを行います
-    cache.removeAll();
-    
-    console.log('🗑️ GPTキャッシュをクリアしました');
-    console.log(`📊 削除前の統計: ${JSON.stringify(stats)}`);
-    
-    return {
-      success: true,
-      message: 'キャッシュクリア完了',
-      previousStats: stats
-    };
-    
-  } catch (error) {
-    console.error('❌ キャッシュクリアに失敗:', error);
-    return {
-      success: false,
-      message: 'キャッシュクリア失敗: ' + error.message
-    };
-  }
-}
+
 
 /**
  * キャッシュ統計情報取得
@@ -1752,66 +1715,45 @@ function getCacheStats() {
   }
 }
 
+
+
+
+
 /**
- * AI設定確認
+ * 都道府県接続テスト
  */
-function checkAISettings() {
-  const apiKeySet = OPENAI_CONFIG.API_KEY !== 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-  const model = OPENAI_CONFIG.DEFAULT_MODEL;
-  const maxTokens = OPENAI_CONFIG.DEFAULT_MAX_TOKENS;
+function testPrefectureConnection() {
+  console.log('🧪 都道府県データ接続テストを開始...');
   
-  const status = `
-⚙️ AI設定確認
-
-API Key: ${apiKeySet ? '✅ 設定済み' : '❌ 未設定'}
-デフォルトモデル: ${model}
-最大トークン数: ${maxTokens}
-キャッシュ機能: ✅ 有効
-リトライ機能: ✅ 有効
-
-${!apiKeySet ? '\n⚠️ APIキーを設定してください' : ''}
-`;
-
-  SpreadsheetApp.getUi().alert('⚙️ AI設定確認', status, SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-/**
- * OpenAI接続テスト関数
- */
-function testGPTConnection() {
   try {
-    console.log('🧪 OpenAI API接続テストを開始...');
-    
-    // APIキー設定確認
-    if (OPENAI_CONFIG.API_KEY === 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx') {
-      console.log('❌ APIキーが設定されていません');
-      return '❌ APIキーが設定されていません。OPENAI_CONFIG.API_KEY を設定してください。';
+    // PREFECTURE_DATAの存在確認
+    if (typeof PREFECTURE_DATA === 'undefined') {
+      throw new Error('PREFECTURE_DATA定数が定義されていません');
     }
     
-    // 簡単なテストリクエスト
-    const testResult = callOpenAI(
-      'Hello', 
-      'この挨拶に日本語で返事をしてください。', 
-      'gpt-3.5-turbo', 
-      50
-    );
+    // 基本データの確認
+    const prefectures = Object.keys(PREFECTURE_DATA);
+    if (prefectures.length !== 47) {
+      throw new Error(`都道府県数が不正です: ${prefectures.length}件（期待値: 47件）`);
+    }
     
-    console.log('✅ テスト成功!');
-    console.log('📝 テスト結果:', testResult);
+    // サンプルデータのテスト
+    const tokyo = PREFECTURE_DATA['東京都'];
+    if (!tokyo || !Array.isArray(tokyo)) {
+      throw new Error('東京都のデータが不正です');
+    }
     
-    return `✅ テスト成功!\n応答: ${testResult}`;
+    console.log('✅ 都道府県データ接続テスト成功!');
+    console.log(`📊 都道府県数: ${prefectures.length}`);
+    console.log(`📊 東京都の区市町村数: ${tokyo.length}`);
+    
+    return `✅ 接続テスト成功!\n都道府県数: ${prefectures.length}\n東京都の区市町村数: ${tokyo.length}`;
     
   } catch (error) {
     console.error('❌ 接続テスト失敗:', error.message);
     return `❌ 接続テスト失敗: ${error.message}`;
   }
 }
-
-/**
- * 全GPT関数テスト
- */
-function testAllGPTFunctions() {
-  console.log('🚀 全GPT関数の動作テストを開始...');
   
   const tests = [
     // 基本機能
@@ -2061,153 +2003,8 @@ function batchAIProcessing() {
   }
 }
 
-/**
- * 助成金分析AI関数
- * 
- * @customfunction
- * @param {string} grantInfo 助成金情報テキスト
- * @param {number} length 分析結果の文字数（省略可能、デフォルト500字）
- * @return {string} 助成金の分析結果
- */
-function GPT_GRANT_ANALYSIS(grantInfo, length) {
-  const maxLength = length || 500;
-  const instruction = `以下の助成金・補助金情報を詳細に分析し、以下の項目について${maxLength}字以内でまとめてください：
-1. 対象者・対象企業の条件
-2. 支援内容・金額
-3. 申請時期・締切
-4. 申請の難易度
-5. 注意すべきポイント
-簡潔で実用的な情報を提供してください。`;
-  return GPT(grantInfo, instruction, 'gpt-4');
-}
-
-/**
- * 助成金カテゴリ分類関数
- * 
- * @customfunction
- * @param {string} grantInfo 助成金情報
- * @return {string} 分類結果（複数カテゴリの場合はカンマ区切り）
- */
-function GPT_GRANT_CATEGORY(grantInfo) {
-  const categories = "創業・起業支援,研究開発,DX・IT化,省エネ・環境,人材育成,事業拡大,設備投資,海外展開,地域活性化,その他";
-  const instruction = `以下の助成金情報を分析し、適切なカテゴリに分類してください。
-カテゴリ: ${categories}
-最も適切なカテゴリを1-2個選択し、カンマ区切りで回答してください。`;
-  return GPT(grantInfo, instruction, 'gpt-3.5-turbo');
-}
-
-/**
- * 申請締切管理関数
- * 
- * @customfunction
- * @param {string} grantInfo 助成金情報
- * @param {string} currentDate 現在日時（省略可能）
- * @return {string} 申請スケジュール提案
- */
-function GPT_GRANT_SCHEDULE(grantInfo, currentDate) {
-  const today = currentDate || new Date().toLocaleDateString('ja-JP');
-  const instruction = `助成金の申請スケジュールを分析し、以下の形式で提案してください：
-現在日時: ${today}
-
-1. 申請締切日: [日付]
-2. 準備開始推奨日: [日付]  
-3. 必要な準備期間: [週数]
-4. 重要なマイルストーン: [準備段階ごとの目標日]
-5. 緊急度: [高/中/低]`;
-  return GPT(grantInfo, instruction, 'gpt-3.5-turbo');
-}
-
-/**
- * 助成金比較分析関数
- * 
- * @customfunction
- * @param {string} grant1 助成金1の情報
- * @param {string} grant2 助成金2の情報
- * @param {string} comparePoint 比較観点（省略可能：金額,条件,難易度など）
- * @return {string} 比較分析結果
- */
-function GPT_GRANT_COMPARE(grant1, grant2, comparePoint) {
-  const point = comparePoint || "総合的な観点";
-  const instruction = `以下の2つの助成金を${point}で比較分析してください：
-
-【助成金A】
-${grant1}
-
-【助成金B】
-${grant2}
-
-以下の項目で比較してください：
-1. 支援金額・規模
-2. 申請条件・難易度
-3. 申請期間・締切
-4. 申請プロセス
-5. 採択確率
-6. おすすめ度とその理由`;
-  return GPT(grant1 + " VS " + grant2, instruction, 'gpt-4', 1200);
-}
-
-/**
- * 地域別助成金検索支援関数
- * 
- * @customfunction
- * @param {string} location 地域名（都道府県・市町村）
- * @param {string} businessType 事業種別（省略可能）
- * @return {string} 地域特化助成金情報の分析
- */
-function GPT_GRANT_REGIONAL(location, businessType) {
-  const business = businessType || "一般事業者";
-  const instruction = `${location}地域の${business}向け助成金・補助金について分析してください。
-以下の観点で情報を整理してください：
-1. 主要な地域特化助成金
-2. 申請しやすい助成金
-3. 支援金額が大きい助成金
-4. 地域の特色を活かした支援制度
-5. 申請時期・スケジュール
-6. 地域での申請支援窓口・相談先`;
-  return GPT(location + " " + business, instruction, 'gpt-4', 1000);
-}
-
-/**
- * 助成金AI分析実行
- */
-function runGrantAnalysis() {
-  try {
-    const sheet = SpreadsheetApp.getActiveSheet();
-    const selection = sheet.getActiveRange();
-    
-    if (!selection || selection.getNumRows() !== 1) {
-      SpreadsheetApp.getUi().alert('❌ エラー', '分析する助成金の行を1つ選択してください。', SpreadsheetApp.getUi().ButtonSet.OK);
-      return;
-    }
-    
-    const rowData = getRowData(sheet, selection.getRow());
-    if (!rowData) {
-      SpreadsheetApp.getUi().alert('❌ エラー', 'データが見つかりません。', SpreadsheetApp.getUi().ButtonSet.OK);
-      return;
-    }
-    
-    const structuredData = convertRowDataToStructured(rowData);
-    const grantInfo = `
-タイトル: ${structuredData.title}
-内容: ${structuredData.content}
-対象者: ${structuredData.target_description}
-助成金額: ${structuredData.amount_display}
-申請期限: ${structuredData.deadline_display}
-実施組織: ${structuredData.organization}
-`;
-    
-    // AI分析を実行
-    const analysisResult = GPT_GRANT_RISK(grantInfo);
-    
-    // 結果を新しいシートまたはサイドバーに表示
-    const ui = SpreadsheetApp.getUi();
-    ui.alert('🤖 助成金AI分析結果', `${structuredData.title}\n\n${analysisResult}`, ui.ButtonSet.OK);
-    
-  } catch (error) {
-    SpreadsheetApp.getUi().alert('❌ エラー', `AI分析中にエラーが発生しました：\n${error.message}`, SpreadsheetApp.getUi().ButtonSet.OK);
-  }
-}
-
+// =============================================================================
+// 🔧 WordPress連携用統合関数 - 下位互換性のため
 /**
  * トリガーを設定
  */
