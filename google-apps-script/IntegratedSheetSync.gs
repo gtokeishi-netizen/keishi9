@@ -139,22 +139,35 @@ const CONFIG = WORDPRESS_CONFIG;
  */
 function GET_MUNICIPALITIES(prefecture) {
   try {
+    // デバッグログ追加
+    console.log('GET_MUNICIPALITIES called with:', prefecture);
+    
     if (!prefecture || prefecture.toString().trim() === '') {
       return 'エラー: 都道府県名を入力してください';
     }
     
     const prefName = prefecture.toString().trim();
+    console.log('Prefecture name processed:', prefName);
+    
+    // PREFECTURE_DATAの存在確認
+    if (typeof PREFECTURE_DATA === 'undefined') {
+      return 'エラー: 都道府県データが読み込まれていません';
+    }
+    
     const municipalities = PREFECTURE_DATA[prefName];
+    console.log('Municipalities found:', municipalities ? municipalities.length : 0);
     
     if (!municipalities) {
-      return `エラー: 「${prefName}」が見つかりません。正確な都道府県名を入力してください。`;
+      // 利用可能な都道府県名を表示
+      const availablePrefectures = Object.keys(PREFECTURE_DATA).slice(0, 5).join(', ');
+      return `エラー: 「${prefName}」が見つかりません。利用可能な例: ${availablePrefectures}...`;
     }
     
     return municipalities.join(', ');
     
   } catch (error) {
     console.error('GET_MUNICIPALITIES error:', error);
-    return `エラー: ${error.message}`;
+    return `関数エラー: ${error.message}`;
   }
 }
 
@@ -2374,25 +2387,34 @@ function showGPTExamples() {
   const examples = `
 🤖 GPT・AI機能 使用例
 
-1. AIチャット機能
-   =AI_CHAT("助成金申請のコツを教えて")
-   =AI_CHAT("事業計画書の書き方", "製造業向け")
+【基本的な使い方】
+=AI_CHAT("助成金申請のコツを教えて")
+=AI_CHAT("事業計画書の書き方", "IT企業向け")
 
-2. 申請書レビュー機能  
-   =REVIEW_APPLICATION(A2)  // A2セルの申請書内容をレビュー
+【専用関数】  
+=REVIEW_APPLICATION(A2)  // A2の申請書をレビュー
+=SUMMARIZE_GRANT(B2)     // B2の助成金情報を要約
 
-3. 助成金要約機能
-   =SUMMARIZE_GRANT(B2)   // B2セルの助成金情報を要約
+【実践的な質問例】
+=AI_CHAT("この事業に適した助成金は？", "Web制作・従業員5名")
+=AI_CHAT("申請書の改善点は？", A3)
+=AI_CHAT("補助金と助成金の違いは？")
 
-📝 使用前の準備:
-1. メニューから「🤖 GPT・AI機能」→「🔑 OpenAI APIキー設定」を実行
-2. OpenAI APIキーを入力して保存
-3. 各機能をテストしてから本格利用
+【コンテキストを活用】
+=AI_CHAT("資金調達戦略を教えて", "飲食店・コロナ禍")
+=AI_CHAT("次にやるべきことは？", "申請書提出済み")
+
+📝 設定手順:
+1. 🔑 OpenAI APIキー設定（このメニューから）
+2. 💬 AIチャットテスト で動作確認
+3. セル内で =AI_CHAT("質問") を入力
 
 💡 ヒント:
-• 長い文章は別セルに分けて入力
-• コンテキスト（文脈）を追加するとより良い回答が得られます
-• API利用料金にご注意ください
+• 具体的な質問ほど良い回答が得られます
+• 他のセルを参照して情報を組み合わせ可能
+• 月$10-20程度の予算設定を推奨
+
+詳細ガイド: /home/user/webapp/GPT_CHAT_使用例ガイド.md
 `;
   
   SpreadsheetApp.getUi().alert(
