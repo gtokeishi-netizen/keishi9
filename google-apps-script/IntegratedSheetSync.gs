@@ -461,6 +461,90 @@ function SUMMARIZE_GRANT(grantInfo) {
   }
 }
 
+/**
+ * B列のタイトルを調査し、詳細な説明文を生成する機能
+ * 
+ * @customfunction
+ * @param {string} title B列のタイトル
+ * @return {string} 2000文字の詳細説明文
+ */
+function GENERATE_DESCRIPTION(title) {
+  try {
+    if (!title || title.toString().trim() === '') {
+      return 'エラー: タイトルを入力してください';
+    }
+    
+    const titleText = title.toString().trim();
+    
+    const systemMessage = `
+あなたは助成金・補助金の専門家です。
+以下のタイトルの助成金について、2000文字程度で詳細な説明文を作成してください。
+
+作成する内容：
+1. 制度の目的と背景
+2. 対象者・対象事業の詳細
+3. 支援内容（金額・範囲・条件）
+4. 申請要件と必要書類
+5. 申請手続きの流れ
+6. 審査基準とポイント
+7. 採択後の手続きと注意事項
+8. 類似制度との違いや特徴
+
+以下の点に注意してください：
+- 正確で実用的な情報を提供する
+- 申請者にとって有用なアドバイスを含める
+- 読みやすく構造化された文章にする
+- 2000文字前後で完結にまとめる
+- 日本語で記述する
+
+タイトル: ${titleText}
+`;
+    
+    // より長いコンテンツ生成のため、max_tokensを増やす
+    const apiKey = PropertiesService.getScriptProperties().getProperty('OPENAI_API_KEY');
+    if (!apiKey) {
+      return 'エラー: OpenAI APIキーが設定されていません。setupOpenAI()関数を実行してください。';
+    }
+
+    const payload = {
+      model: 'gpt-4o-mini', // gpt-4o-miniを使用してコスト効率を向上
+      messages: [
+        {
+          role: 'system',
+          content: systemMessage
+        },
+        {
+          role: 'user',
+          content: `「${titleText}」について詳細な説明文を2000文字で作成してください。`
+        }
+      ],
+      max_tokens: 2500, // 2000文字の説明文を生成するため十分なトークン数
+      temperature: 0.7
+    };
+
+    const response = UrlFetchApp.fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(payload)
+    });
+
+    const responseData = JSON.parse(response.getContentText());
+    
+    if (responseData.error) {
+      return `APIエラー: ${responseData.error.message}`;
+    }
+
+    return responseData.choices[0].message.content.trim();
+    
+  } catch (error) {
+    console.error('GENERATE_DESCRIPTION error:', error);
+    return `エラー: ${error.message}`;
+  }
+}
+
 // =============================================================================
 // 🔄 WordPress同期機能セクション
 // =============================================================================
