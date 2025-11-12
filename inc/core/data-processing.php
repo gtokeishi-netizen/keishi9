@@ -787,7 +787,7 @@ function gi_ensure_prefecture_terms() {
         );
         
         if (is_wp_error($result)) {
-            error_log('Failed to create prefecture term: ' . $pref['name'] . ' - ' . $result->get_error_message());
+
         }
     }
     

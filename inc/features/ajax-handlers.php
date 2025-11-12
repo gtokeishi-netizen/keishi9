@@ -151,7 +151,7 @@ function handle_ai_search() {
         ]);
         
     } catch (Exception $e) {
-        error_log('AI Search Error: ' . $e->getMessage());
+
         wp_send_json_error([
             'message' => '検索中にエラーが発生しました。しばらく後でお試しください。',
             'code' => 'SEARCH_ERROR',
@@ -211,7 +211,7 @@ function handle_ai_chat_request() {
         ]);
         
     } catch (Exception $e) {
-        error_log('AI Chat Error: ' . $e->getMessage());
+
         wp_send_json_error([
             'message' => 'チャット処理中にエラーが発生しました。',
             'code' => 'CHAT_ERROR',
